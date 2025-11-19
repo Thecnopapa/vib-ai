@@ -209,5 +209,10 @@ __marimo__/
 
 
 .idea
-Internship/Dataset
-Internship/foldseek
+internship/SaProt
+internship/data
+internship/out
+Internship-src/Dataset
+Internship-src/foldseek
+
+*/*.swp

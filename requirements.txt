@@ -1,6 +1,13 @@
-matplotlib
-numpy
-pandas
-seaborn
-biopython
 
+#python >= 3.13
+setuptools >= 77.0.3
+biopython >= 1.85
+pandas >= 2.2.3
+numpy >= 2.2.5
+matplotlib >= 3.10.7
+typing-extensions >= 4.15.0
+requests >= 2.32.5
+unidecode >= 1.4.0
+
+# NEW
+seaborn
