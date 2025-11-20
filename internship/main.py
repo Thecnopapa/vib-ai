@@ -259,18 +259,36 @@ for file in sorted(os.listdir("out/SaProt/full")):
 np.random.seed(0)
 num_residues = 255
 embedding_dim = 480
-
 bi.log("start")
 
-nstruc = 1
+total_res = sum([len(r) for r in all_residues_seq])
+print(total_res)
+embeddings_struc = []
+embeddings_seq = []
+for emb in all_embeddings_struc:
+    embeddings_struc.extend(emb[0][1:-1].tolist())
+for emb in all_embeddings_seq:
+    embeddings_seq.extend(emb[0][1:-1].tolist())
 
-emb_seq = all_embeddings_seq[nstruc][0][1:-1]
-emb_struct = all_embeddings_struc[nstruc][0][1:-1]
+embeddings_struc = np.array(embeddings_struc)
+embeddings_seq = np.array(embeddings_seq)
+print(len(embeddings_struc))
+print(len(embeddings_seq))
+
+labels = []
+for labs in all_residues_struc:
+    labels.extend([ss_to_index(ss["ss"]) for ss in labs.values()])
+print(len(labels))
+labels = np.array(labels)
+
+
+
+emb_seq = embeddings_seq
+emb_struct = embeddings_struc
 print(emb_seq[0])
 print(emb_seq.shape)
 print(emb_struct.shape)
-print(len(all_residues_struc[nstruc]))
-labels = np.array([ss_to_index(ss["ss"]) for ss in all_residues_struc[nstruc].values()])
+
 
 
 print(emb_seq)
@@ -383,7 +401,7 @@ bi.log("start", "Plotting...")
 def plot_embeddings(embeddings, labels, title="Embedding PCA"):
     pca = PCA(n_components=2)
     emb_2d = pca.fit_transform(embeddings)
-    plt.figure(figsize=(6,5))
+    plt.figure(figsize=(12,10))
     sb.scatterplot(x=emb_2d[:,0], y=emb_2d[:,1], hue=labels, palette="Set1", s=40, alpha=0.8)
     plt.title(title)
     plt.show()
@@ -394,7 +412,7 @@ plot_embeddings(emb_test_struct, labels_struct, title="Sequence+3Di embeddings (
 # Confusion matrices
 def plot_confusion(preds, labels, title="Confusion Matrix"):
     cm = confusion_matrix(labels, preds)
-    plt.figure(figsize=(4,4))
+    plt.figure(figsize=(8,8))
     sb.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=['H','E','C'], yticklabels=['H','E','C'])
     plt.xlabel("Predicted")
     plt.ylabel("True")
