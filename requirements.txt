@@ -11,3 +11,6 @@ unidecode >= 1.4.0
 
 # NEW
 seaborn
+transformers
+torch
+scikit-learn
