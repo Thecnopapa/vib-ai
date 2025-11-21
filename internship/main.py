@@ -17,8 +17,12 @@ bi.log("start", "internship > main.py")
 
 force = "force" in sys.argv
 data_folder="receptors"
+pdb_list_file = "data/receptors.txt"
+if "mega" in sys.argv:
+    data_folder = "mega-batch"
+    pdb_list_file = "data/mega-batch20K.txt"
 
-file_folder = bi.imports.downloadPDB("./data", data_folder, file_path="data/receptors.txt", file_format="cif", overwrite=False)
+file_folder = bi.imports.downloadPDB("./data", data_folder, file_path=pdb_list_file, file_format="cif", overwrite=False)
 
 bi.log(1, "File folder:", file_folder)
 
@@ -246,11 +250,12 @@ for file in sorted(os.listdir("out/SaProt/seq_only")):
 #print(len(all_residues_seq))
 #print(len(all_embeddings_seq))
 
-
+num_structures = 0
 for file in sorted(os.listdir("out/SaProt/full")):
     #print(file)
     if file.endswith(".pt"):
         all_embeddings_struc.append(torch.load(f"out/SaProt/full/{file}"))
+        num_structures += 1
     if file.endswith(".json"):
         all_residues_struc.append(json.load(open(f"out/SaProt/full/{file}")))
 
@@ -379,12 +384,16 @@ def train_mlp(model, train_loader, test_loader, lr=1e-3, epochs=20):
         print(f"Epoch {epoch+1}, Test accuracy: {acc:.3f}")
     return model, preds, labels_eval
 
+
+
+os.makedirs("models", exist_ok=True)
 # ---------------------------
 # Train MLP on sequence-only embeddings
 # ---------------------------
 print("Training MLP on sequence-only embeddings...")
 mlp_seq = MLP(input_dim=embedding_dim)
 mlp_seq, preds_seq, labels_seq = train_mlp(mlp_seq, train_loader_seq, test_loader_seq)
+torch.save(mlp_seq.state_dict(), f"models/{data_folder}_seq.pth")
 
 # ---------------------------
 # Train MLP on structure-aware embeddings
@@ -392,22 +401,25 @@ mlp_seq, preds_seq, labels_seq = train_mlp(mlp_seq, train_loader_seq, test_loade
 print("Training MLP on sequence+3Di embeddings...")
 mlp_struct = MLP(input_dim=embedding_dim)
 mlp_struct, preds_struct, labels_struct = train_mlp(mlp_struct, train_loader_struct, test_loader_struct)
+torch.save(mlp_seq.state_dict(), f"models/{data_folder}_struct.pth")
+
 
 bi.log("start", "Plotting...")
 0
 # ---------------------------
 # Visualization
 # ---------------------------
+os.makedirs("figs", exist_ok=True)
 def plot_embeddings(embeddings, labels, title="Embedding PCA"):
     pca = PCA(n_components=2)
     emb_2d = pca.fit_transform(embeddings)
     plt.figure(figsize=(12,10))
     sb.scatterplot(x=emb_2d[:,0], y=emb_2d[:,1], hue=labels, palette="Set1", s=40, alpha=0.8)
     plt.title(title)
-    plt.show()
+    plt.savefig(f"figs/embeddings_{title}.png")
 
-plot_embeddings(emb_test_seq, labels_seq, title="Sequence-only embeddings (PCA)")
-plot_embeddings(emb_test_struct, labels_struct, title="Sequence+3Di embeddings (PCA)")
+plot_embeddings(emb_test_seq, labels_seq, title=f"{data_folder}_sequence_only_N_{num_structures}")
+plot_embeddings(emb_test_struct, labels_struct, title=f"{data_folder}_sequence_+_3Di_N_{num_structures}")
 
 # Confusion matrices
 def plot_confusion(preds, labels, title="Confusion Matrix"):
@@ -417,7 +429,7 @@ def plot_confusion(preds, labels, title="Confusion Matrix"):
     plt.xlabel("Predicted")
     plt.ylabel("True")
     plt.title(title)
-    plt.show()
+    plt.savefig(f"figs/confusion_{title}.png")
 
-plot_confusion(preds_seq, labels_seq, title="Sequence-only MLP")
-plot_confusion(preds_struct, labels_struct, title="Sequence+3Di MLP")
+plot_confusion(preds_seq, labels_seq, title=f"{data_folder}_sequence_only_N_{num_structures}")
+plot_confusion(preds_struct, labels_struct, title=f"{data_folder}_sequence_+_3Di_N_{num_structures}")
