@@ -260,30 +260,22 @@ if force or train:
     all_residues_struc = []
     all_embeddings_struc = []
     num_sequences = 0
+    num_structures = 0
     training_structures = []
     print(len(os.listdir("out/SaProt/seq_only")), len(os.listdir("out/SaProt/full"))/2)
-    for file in sorted(os.listdir("out/SaProt/seq_only")):
-        if not( file.split("_")[0]+".cif" in structure_list):
+    for file in sorted(os.listdir("out/SaProt/full"), reverse=True):
+        if not(file.split("_")[0]+".cif" in structure_list):
             continue
-        print(file)
         fname = file.split(".")[0]
-        if file.endswith(".pt") and os.path.exists(f"out/SaProt/full/{fname}.json") and os.path.exists(f"out/SaProt/full/{fname}.pt"):
-            all_embeddings_seq.append(torch.load(f"out/SaProt/seq_only/{fname}.pt"))
-            num_sequences += 1
-            training_structures.append(fname)
-            print(file)
-
-    num_structures = 0
-    for file in sorted(os.listdir("out/SaProt/full")):
-        if not (file.split("_")[0]+".cif" in structure_list):
-            continue
-        print(file)
-        fname = file.split(".")[0]
-        if file.endswith(".pt") and os.path.exists(f"out/SaProt/full/{fname}.json") and fname in training_structures:
+        if file.endswith(".pt") and os.path.exists(f"out/SaProt/full/{fname}.json") and os.path.exists(f"out/SaProt/seq_only/{fname}.pt"):
             all_embeddings_struc.append(torch.load(f"out/SaProt/full/{fname}.pt"))
             all_residues_struc.append(json.load(open(f"out/SaProt/full/{fname}.json")))
+            all_embeddings_seq.append(torch.load(f"out/SaProt/seq_only/{fname}.pt"))
+            num_sequences += 1
             num_structures += 1
-            print(file)
+            training_structures.append(fname)
+            #print(file)
+
 
 
     print("Num filels:", num_structures, num_sequences)
@@ -291,42 +283,67 @@ if force or train:
     np.random.seed(0)
     num_residues = 255
     embedding_dim = 480
+    num_structs = 300
+
     bi.log("start")
 
     total_res = sum([len(r) for r in all_residues_seq])
     print(total_res)
     embeddings_struc = []
     embeddings_seq = []
-    for emb in all_embeddings_struc:
-        embeddings_struc.extend(emb[0][1:-1].tolist())
-    for emb in all_embeddings_seq:
-        embeddings_seq.extend(emb[0][1:-1].tolist())
+    labels = []
+    embs = zip(all_embeddings_struc[0:num_structs], all_embeddings_seq[0:num_structs], all_residues_struc[0:num_structs] )
+    for n, (emb_struc, emb_seq, reslist) in enumerate(embs):
+        embeddings_struc.extend(emb_struc[0][1:-1].tolist())
+        embeddings_seq.extend(emb_seq[0][1:-1].tolist())
+        for ress in reslist.values():
+            #print(ress)
+            try:
+                int(ress["res"])
+                labels.append(ss_to_index(ress["ss"]))
+            except:
+                bi.log("warning", "Disordered res:", ress["res"])
+                labels.append(ss_to_index(ress["ss"]))
+        print(len(embeddings_struc))
+        print(len(embeddings_seq))
+        print(len(labels))
+        print(training_structures[n])
+        try:
+            assert(len(embeddings_struc) == len(embeddings_seq) == len(labels))
+        except:
+            f = f"out/SaProt/full/{training_structures[n]}.pt"
+            os.remove(f)
+            bi.log("error", "removed:", f)
+            exit()
+
+        bi.log("end")
+
+        #labels.extend([ss_to_index(ss["ss"]) for ss in labs.values()])
 
     embeddings_struc = np.array(embeddings_struc)
-    embeddings_seq = np.array(embeddings_seq)
+    embeddings_seq = np.array(embeddings_seq)#
+    labels = np.array(labels)
     print(len(embeddings_struc))
     print(len(embeddings_seq))
-
-    labels = []
-    for labs in all_residues_struc:
-        labels.extend([ss_to_index(ss["ss"]) for ss in labs.values()])
     print(len(labels))
-    labels = np.array(labels)
+    bi.log("end")
+
 
 
 
     emb_seq = embeddings_seq
     emb_struct = embeddings_struc
-    print(emb_seq[0])
+    #print(emb_seq[0])
     print(emb_seq.shape)
     print(emb_struct.shape)
+    print(labels.shape)
 
 
 
-    print(emb_seq)
-    print("#")
-    print(emb_struct)
-    print(labels)
+    #print(emb_seq)
+    #print("#")
+    #print(emb_struct)
+    #print(labels)
 
 
 
@@ -452,7 +469,7 @@ if force or train:
     def plot_confusion(preds, labels, title="Confusion Matrix"):
         cm = confusion_matrix(labels, preds)
         plt.figure(figsize=(8,8))
-        sb.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=['H','E','C'], yticklabels=['H','E','C'])
+        sb.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=['H','B','E','G',"I","T","S","-"], yticklabels=['H','B','E','G',"I","T","S","-"])
         plt.xlabel("Predicted")
         plt.ylabel("True")
         plt.title(title)
