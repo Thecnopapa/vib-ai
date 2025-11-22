@@ -283,7 +283,7 @@ if force or train:
     np.random.seed(0)
     num_residues = 255
     embedding_dim = 480
-    num_structs = 300
+    num_structs = len(training_structures)
 
     bi.log("start")
 
@@ -294,27 +294,35 @@ if force or train:
     labels = []
     embs = zip(all_embeddings_struc[0:num_structs], all_embeddings_seq[0:num_structs], all_residues_struc[0:num_structs] )
     for n, (emb_struc, emb_seq, reslist) in enumerate(embs):
-        embeddings_struc.extend(emb_struc[0][1:-1].tolist())
-        embeddings_seq.extend(emb_seq[0][1:-1].tolist())
+        new_struc = emb_struc[0][1:-1].tolist()
+        new_seq = emb_seq[0][1:-1].tolist()
+        new_lab = []
         for ress in reslist.values():
             #print(ress)
             try:
                 int(ress["res"])
-                labels.append(ss_to_index(ress["ss"]))
+                new_lab.append(ss_to_index(ress["ss"]))
             except:
                 bi.log("warning", "Disordered res:", ress["res"])
-                labels.append(ss_to_index(ress["ss"]))
-        print(len(embeddings_struc))
-        print(len(embeddings_seq))
-        print(len(labels))
-        print(training_structures[n])
+                new_lab.append(ss_to_index(ress["ss"]))
+        print(len(new_struc), len(new_seq), len(new_lab))
+
         try:
-            assert(len(embeddings_struc) == len(embeddings_seq) == len(labels))
+            assert(len(new_struc) == len(new_seq) == len(new_lab))
         except:
             f = f"out/SaProt/full/{training_structures[n]}.pt"
             os.remove(f)
-            bi.log("error", "removed:", f)
-            exit()
+            bi.log("error", "Missmatch in file (removed):", f)
+            training_structures.remove(training_structures[n])
+            continue
+        print(len(embeddings_struc))append
+        print(len(embeddings_seq))
+        print(len(labels))
+
+        assert(len(embeddings_struc) == len(embeddings_seq) == len(labels))
+        embeddings_struc.extend(new_struc)
+        embeddings_seq.extend(new_seq)
+        labels.extend(new_lab)
 
         bi.log("end")
 
@@ -356,22 +364,23 @@ if force or train:
         def __getitem__(self, idx):
             return self.embeddings[idx], self.labels[idx]
 
-
+    bi.log("start", "splitting...")
     # Split into train/test
     emb_train_seq, emb_test_seq, y_train, y_test = train_test_split(emb_seq, labels, test_size=0.2, random_state=42)
     emb_train_struct, emb_test_struct, _, _ = train_test_split(emb_struct, labels, test_size=0.2, random_state=42)
-
+    bi.log("start", "moiunting seq data...")
     train_dataset_seq = ResidueDataset(emb_train_seq, y_train)
     test_dataset_seq = ResidueDataset(emb_test_seq, y_test)
-
+    bi.log("start", "mounting struc data...")
     train_dataset_struct = ResidueDataset(emb_train_struct, y_train)
     test_dataset_struct = ResidueDataset(emb_test_struct, y_test)
-
+    bi.log("start", "loading seq data...")
     train_loader_seq = DataLoader(train_dataset_seq, batch_size=32, shuffle=True)
     test_loader_seq = DataLoader(test_dataset_seq, batch_size=32)
-
+    bi.log("start", "loading struc data...")
     train_loader_struct = DataLoader(train_dataset_struct, batch_size=32, shuffle=True)
     test_loader_struct = DataLoader(test_dataset_struct, batch_size=32)
+    bi.log("end")
 
     # ---------------------------
     # MLP model
@@ -434,22 +443,22 @@ if force or train:
     # ---------------------------
     # Train MLP on sequence-only embeddings
     # ---------------------------
-    print("Training MLP on sequence-only embeddings...")
+    bi.log("start", "Training MLP on sequence-only embeddings...")
     mlp_seq = MLP(input_dim=embedding_dim)
     mlp_seq, preds_seq, labels_seq = train_mlp(mlp_seq, train_loader_seq, test_loader_seq)
     torch.save(mlp_seq.state_dict(), f"models/{data_folder}_seq.pth")
+    bi.log("end", "Training MLP on sequence+3Di embeddings")
 
     # ---------------------------
     # Train MLP on structure-aware embeddings
     # ---------------------------
-    print("Training MLP on sequence+3Di embeddings...")
+    bi.log("start", "Training MLP on sequence+3Di embeddings...")
     mlp_struct = MLP(input_dim=embedding_dim)
     mlp_struct, preds_struct, labels_struct = train_mlp(mlp_struct, train_loader_struct, test_loader_struct)
     torch.save(mlp_seq.state_dict(), f"models/{data_folder}_struct.pth")
-
+    bi.log("end", "Training MLP on sequence+3Di embeddings")
 
     bi.log("start", "Plotting...")
-    0
     # ---------------------------
     # Visualization
     # ---------------------------
@@ -477,3 +486,7 @@ if force or train:
 
     plot_confusion(preds_seq, labels_seq, title=f"{data_folder}_sequence_only_N_{len(training_structures)}")
     plot_confusion(preds_struct, labels_struct, title=f"{data_folder}_sequence_+_3Di_N_{len(training_structures)}")
+
+
+    bi.log("end", "Plotting")
+
