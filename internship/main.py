@@ -1,39 +1,48 @@
 
 import os, sys, subprocess
-from copy import deepcopy
-import json
-import pandas as pd
 
-from Bio.PDB.DSSP import dssp_dict_from_pdb_file
-from networkx.algorithms.centrality.flow_matrix import flow_matrix_row
+import json
+import numpy as np
+import torch
+from model import MLP
 
 sys.path.append("/home/iain/projects/bioiain")
 
 import src.bioiain as bi
 from src.bioiain.utilities.DSSP import DSSP, ss_to_index
+from embeddings import run_dssp, run_foldseek, generate_embeddings
 
 
 bi.log("start", "internship > main.py")
+
+
 skip_download = "no-download" in sys.argv
 force = "force" in sys.argv
 embeddings = "embeddings" in sys.argv
 train = "train" in sys.argv
-data_folder="receptors"
-pdb_list_file = "data/receptors.txt"
-if "mega" in sys.argv:
-    data_folder = "mega-batch"
-    pdb_list_file = "data/mega-batch20K.txt"
+predict = "predict" in sys.argv
 
-if skip_download:
-    file_folder = f"data/{data_folder}"
-else:
-    file_folder = bi.imports.downloadPDB("./data", data_folder, file_path=pdb_list_file, file_format="cif", overwrite=False)
+np.random.seed(0)
+num_residues = 255
+embedding_dim = 480
 
-bi.log(1, "File folder:", file_folder)
+if not predict:
+    data_folder="receptors"
+    pdb_list_file = "data/receptors.txt"
+    if "mega" in sys.argv:
+        data_folder = "mega-batch"
+        pdb_list_file = "data/mega-batch20K.txt"
 
-structure_list = sorted(os.listdir(file_folder))
+    if skip_download:
+        file_folder = f"data/{data_folder}"
+    else:
+        file_folder = bi.imports.downloadPDB("./data", data_folder, file_path=pdb_list_file, file_format="cif", overwrite=False)
 
-if force or embeddings:
+    bi.log(1, "File folder:", file_folder)
+
+    structure_list = sorted(os.listdir(file_folder))
+
+if (force or embeddings) and not predict:
 
     for file in structure_list:
 
@@ -42,197 +51,18 @@ if force or embeddings:
         structure = None
         #structure = bi.imports.recover("1MOT")
 
-
-        bi.log(1, "Structure:", structure)
-
-
-        if structure is None:
-            pass
         structure = bi.imports.loadPDB(os.path.join(file_folder, f"{name}.cif"))
         structure.pass_down()
-        #bi.log(1, "Structure:", structure)
         bi.log("header", structure)
 
-        #structure.export(structure_format="cif")
-        model = structure[0]
-        bi.log(1, "Model:", model)
-        model.__getitem__ = model._getitem
-        model.export()
-        #print(model.__getitem__)
-        print(model.get_list())
-        #print(model.child_dict)
-        #print(model[0])
-
-        # p = PDBParser()
-        # structure = p.get_structure("1MOT", "data/other/1MOT.cif")
-        # model = structure[0]
-        # print(DSSP)
-        # dssp_dict = dssp_dict_from_pdb_file("data/other/1MOT.pdb")
-        # print(dssp_dict)
-
-        def run_dssp(structure, filename):
-            os.makedirs("out", exist_ok=True)
-            os.makedirs("out/dssp", exist_ok=True)
-            "dssp --output-format dssp ./data/{data_folder}/{filename}.cif ./out/dssp/{filename}.dssp"
-            cmd = ["dssp", "--output-format", "dssp", "--verbose", f"./data/{data_folder}/{filename}.cif", f"./out/dssp/{filename}.dssp"]
-            subprocess.run(cmd)
-            #return DSSP(model, f"./data/other/{filename}.cif", file_type="DSSP")
-            dssp_dict = {c.id:{} for c in structure.get_chains()}
-            #print(dssp_dict)
-            with open(f"./out/dssp/{filename}.dssp", "r") as f:
-                start = False
-
-                for line in f:
-
-                    if "#" in line:
-                        start = True
-                        continue
-                    if not start:
-                        continue
-                    l = line.split(" ")
-                    l = [cl for cl in l if cl != ""]
-
-                    #res = l[1]
-                    #ch = l[2]
-                    #resn = l[3]
-                    #ss = l[4]
-                    if "!" in line:
-                        continue
-                    res = line[5:11].strip()
-                    ch = line[11]
-                    resn = line[13].upper()
-                    ss = line[16]
-                    if line[10] != " ":
-                        bi.log("warning", f"Disordered atom: \n {line}")
-                        #exit()
-                        #continue
-
-                    #print(ch, res, resn, ss)
-
-
-                    dssp_dict[ch][res] = {"res": res, "resn": resn, "ss": ss}
-
-            return dssp_dict
-
-
-
-
-
-
-        def run_foldseek(structure, filename, dssp_dict):
-            bi.log(2, "running foldseek...")
-            "./SaProt/bin/foldseek structureto3didescriptor -v 0 --threads 1 --chain-name-mode 1 ./data/other/1M2Z.cif ./out/foldseek/1M2Z.tsv"
-            os.makedirs("out", exist_ok=True)
-            os.makedirs("out/foldseek", exist_ok=True)
-            cmd = ["./SaProt/bin/foldseek",
-                   "structureto3didescriptor", "-v", "0", "--threads", "4",
-                   "--chain-name-mode", "1", f"./data/{data_folder}/{filename}.cif",
-                   f"./out/foldseek/{filename}.csv"
-            ]
-            print(" ".join(cmd))
-            subprocess.run(cmd)
-            with open(f"./out/foldseek/{filename}.csv", "r", encoding="utf-8") as f:
-                for line in f:
-                    ch = line.split("\t")[0].split("_")[1].split(" ")[0]
-                    bi.log(3, "foldseek out:", ch )
-                    l = line.split("\t")[2]
-                    toks = [t for t in l]
-                    print(len(dssp_dict[ch].items()), len(toks))
-                    if not len(dssp_dict[ch].items()) == len(toks):
-                        dssp_dict.pop(ch)
-                        bi.log("warning", "foldseek tokens and dssp_dict do not match:", ch )
-                        continue
-                    for n, (k, v) in enumerate(dssp_dict[ch].items()):
-                        if toks[n] == " ":
-                            toks = "-"
-                        dssp_dict[ch][k]["fs"] = toks[n]
-            return dssp_dict
-
-
-        def generate_embeddings(dssp_dict):
-            bi.log(2, "Generating embeddings...")
-            seqs = {k: [] for k in dssp_dict.keys()}
-            seqs3D = {k: [] for k in dssp_dict.keys()}
-            for k, v in dssp_dict.items():
-                #print(v)
-                #print(k)
-                try:
-                    seqs3D[k] = ["{}{}".format(i["resn"].upper(), i["fs"].lower()) for i in v.values()]
-                except:
-                    continue
-                seqs[k] = ["{}{}".format(i["resn"].upper(), "#") for i in v.values()]
-            for ch in seqs.keys():
-                # Load model directly
-                from transformers import AutoTokenizer, AutoModelForMaskedLM
-                import torch
-                device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
-                tokenizer = AutoTokenizer.from_pretrained("westlake-repl/SaProt_35M_AF2")
-                model = AutoModelForMaskedLM.from_pretrained("westlake-repl/SaProt_35M_AF2")
-
-                tokenizerS = AutoTokenizer.from_pretrained("westlake-repl/SaProt_35M_AF2_seqOnly")
-                modelS = AutoModelForMaskedLM.from_pretrained("westlake-repl/SaProt_35M_AF2_seqOnly")
-
-                # print(tokenizer)
-                # print(model)
-
-                modelS.eval()
-                modelS.to(device)
-
-                seq = "".join(seqs[ch])
-                long_seq3D = "".join(seqs3D[ch])
-
-
-                inputs = tokenizerS(seq, return_tensors="pt").to(device)
-                inputs = {k: v.to(device) for k, v in inputs.items()}
-                print(inputs)
-
-                with torch.no_grad():
-                    outputs = modelS(**inputs, output_hidden_states=True)
-                # print(outputs)
-
-                # outputs.hidden_states is a tuple of all layers, including embeddings
-                # Shape of each layer: [batch_size, sequence_length, hidden_dim]
-                all_hidden_states = outputs.hidden_states
-
-                # Last layer hidden states
-                last_hidden = all_hidden_states[-1]  # [1, seq_len, hidden_dim]
-                print(last_hidden.shape)  # ['<cls>', 'M#', 'E#', 'V#', 'Q#', '<eos>']
-                print(last_hidden)
-
-                os.makedirs("out/SaProt/seq_only", exist_ok=True)
-                torch.save(last_hidden, f"out/SaProt/seq_only/{name}_{ch}.pt")
-
-
-                model.eval()
-                model.to(device)
-
-                inputs = tokenizer(long_seq3D, return_tensors="pt").to(device)
-                inputs = {k: v.to(device) for k, v in inputs.items()}
-
-                with torch.no_grad():
-                    outputs = model(**inputs, output_hidden_states=True)
-
-                # outputs.hidden_states is a tuple of all layers, including embeddings
-                # Shape of each layer: [batch_size, sequence_length, hidden_dim]
-                all_hidden_states = outputs.hidden_states
-
-                # Last layer hidden states
-                last_hidden = all_hidden_states[-1]  # [1, seq_len, hidden_dim]
-                print(last_hidden.shape)
-                print(last_hidden)
-                os.makedirs("out/SaProt/full", exist_ok=True)
-                torch.save(last_hidden, f"out/SaProt/full/{name}_{ch}.pt")
-                json.dump(dssp_dict[ch], open(f"out/SaProt/full/{name}_{ch}.json", "w"))
-            return dssp_dict
 
 
         last_chain = [c.id for c in structure.get_chains()][-1]
         if not os.path.exists(f"./out/SaProt/full/{name}_{last_chain}.pt") or force:
-            dssp_dict = run_dssp(structure, name)
+            dssp_dict = run_dssp(structure, name, data_folder)
             print(dssp_dict.keys())
-            dssp_dict = run_foldseek(structure, name, dssp_dict)
-            dssp_dict = generate_embeddings(dssp_dict)
+            dssp_dict = run_foldseek(structure, name, dssp_dict, data_folder)
+            embedding_folder = generate_embeddings(dssp_dict, name)
             print(dssp_dict.keys())
 
 
@@ -240,7 +70,6 @@ if force or embeddings:
 
 if force or train:
 
-    import torch
     import torch.nn as nn
     import torch.optim as optim
     from torch.utils.data import Dataset, DataLoader
@@ -249,7 +78,6 @@ if force or train:
     from sklearn.metrics import confusion_matrix, accuracy_score, classification_report
     import matplotlib.pyplot as plt
     import seaborn as sb
-    import numpy as np
 
 
 
@@ -280,9 +108,7 @@ if force or train:
 
     print("Num filels:", num_structures, num_sequences)
 
-    np.random.seed(0)
-    num_residues = 255
-    embedding_dim = 480
+
     num_structs = len(training_structures)
 
     bi.log("start")
@@ -315,7 +141,7 @@ if force or train:
             bi.log("error", "Missmatch in file (removed):", f)
             training_structures.remove(training_structures[n])
             continue
-        print(len(embeddings_struc))append
+        print(len(embeddings_struc))
         print(len(embeddings_seq))
         print(len(labels))
 
@@ -329,7 +155,7 @@ if force or train:
         #labels.extend([ss_to_index(ss["ss"]) for ss in labs.values()])
 
     embeddings_struc = np.array(embeddings_struc)
-    embeddings_seq = np.array(embeddings_seq)#
+    embeddings_seq = np.array(embeddings_seq)
     labels = np.array(labels)
     print(len(embeddings_struc))
     print(len(embeddings_seq))
@@ -382,23 +208,7 @@ if force or train:
     test_loader_struct = DataLoader(test_dataset_struct, batch_size=32)
     bi.log("end")
 
-    # ---------------------------
-    # MLP model
-    # ---------------------------
-    class MLP(nn.Module):
-        def __init__(self, input_dim, hidden_dims=[256,128], num_classes=8, dropout=0.2):
-            super().__init__()
-            self.model = nn.Sequential(
-                nn.Linear(input_dim, hidden_dims[0]),
-                nn.ReLU(),
-                nn.Dropout(dropout),
-                nn.Linear(hidden_dims[0], hidden_dims[1]),
-                nn.ReLU(),
-                nn.Dropout(dropout),
-                nn.Linear(hidden_dims[1], num_classes)
-            )
-        def forward(self, x):
-            return self.model(x)
+
 
     # ---------------------------
     # Training function
@@ -489,4 +299,77 @@ if force or train:
 
 
     bi.log("end", "Plotting")
+
+if predict:
+    bi.log("start", "Predicting...")
+    try:
+        seq_index = sys.argv.index("-s") + 1
+        sequence = sys.argv[seq_index]
+    except Exception as e:
+        bi.log("error", "no input sequence provided (-s)")
+        sequence = bi.utilities.strings.clean_string(input("Please enter a sequence to predict: \n").replace(" ", ""))
+    if len(sequence) == 0:
+        bi.log("error", "No input sequence provided")
+        exit()
+
+    bi.log("header", "Sequence:")
+    dssp = {"A":{str(n):{
+        "resn":name,
+        "ss": "#",
+        "res":n,
+    } for n, name in enumerate(sequence)}}
+    print("".join([r["resn"] for r in dssp["A"].values()]))
+    os.makedirs("pred", exist_ok=True)
+    os.makedirs("pred/inputs", exist_ok=True)
+
+    n = 0
+    fname = f"prediction_{bi.utilities.strings.add_front_0(n, 3)}"
+    while fname+".json" in os.listdir("pred/inputs"):
+        n += 1
+        fname = f"prediction_{bi.utilities.strings.add_front_0(n, 3)}"
+
+    bi.log(1, "Assigned id:", fname)
+    json.dump({
+        "sequence": "".join([r["resn"] for r in dssp["A"].values()]),
+        "dssp": dssp}, open(f"pred/inputs/{fname}.json", "w"))
+
+    print(dssp)
+    generate_embeddings(dssp, fname, folder="pred/SaProt", no3D=True)
+
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+    model_path = "models/mega-batch_struct.pth"
+    model = MLP(input_dim=embedding_dim)
+    model.load_state_dict(torch.load(model_path, weights_only=False))
+
+    model.eval()
+    preds = []
+    labels_eval = []
+
+
+    embeddings = torch.load(f"pred/SaProt/seq_only/{fname}_A.pt")[0]
+    bi.log(1, "n embeddings:", len(embeddings), embeddings.shape)
+    with torch.no_grad():
+        for X_batch in embeddings:
+            X_batch = X_batch.to(device)
+            logits = list(model(X_batch).numpy())
+            print(logits)
+            pred = logits.index(max(logits))
+            preds.append(pred)
+    bi.log("header", "Predictions:")
+    print(preds)
+    session = bi.visualisation.pymol.PymolScript(fname, "pred/sessions")
+    for n, p in enumerate(preds):
+        session.color(f"(resi. {n})", int(p))
+    session.write_script()
+
+    bi.log("end")
+
+
+
+
+
+
+
+
 
