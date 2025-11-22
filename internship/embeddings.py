@@ -96,10 +96,10 @@ def generate_embeddings(dssp_dict, name, folder="out/SaProt", no3D=False):
     bi.log(2, "Generating embeddings...")
     seqs = {k: [] for k in dssp_dict.keys()}
     seqs3D = {k: [] for k in dssp_dict.keys()}
-    print(dssp_dict.items())
+    #print(dssp_dict.items())
     for k, v in dssp_dict.items():
-        print(v)
-        print(k)
+        #print(v)
+        #print(k)
 
         if not no3D:
             try:
@@ -108,9 +108,9 @@ def generate_embeddings(dssp_dict, name, folder="out/SaProt", no3D=False):
                 continue
         seqs[k] = ["{}{}".format(i["resn"].upper(), "#") for i in v.values()]
 
-        print(seqs)
-        print(seqs3D)
-        print("######")
+        #print(seqs)
+        #print(seqs3D)
+        #print("######")
 
     for ch in seqs.keys():
         # Load model directly
@@ -134,7 +134,7 @@ def generate_embeddings(dssp_dict, name, folder="out/SaProt", no3D=False):
 
         inputs = tokenizerS(seq, return_tensors="pt").to(device)
         inputs = {k: v.to(device) for k, v in inputs.items()}
-        print(inputs)
+        #print(inputs)
 
         with torch.no_grad():
             outputs = modelS(**inputs, output_hidden_states=True)
@@ -146,8 +146,8 @@ def generate_embeddings(dssp_dict, name, folder="out/SaProt", no3D=False):
 
         # Last layer hidden states
         last_hidden = all_hidden_states[-1]  # [1, seq_len, hidden_dim]
-        print(last_hidden.shape)  # ['<cls>', 'M#', 'E#', 'V#', 'Q#', '<eos>']
-        print(last_hidden)
+        #print(last_hidden.shape)  # ['<cls>', 'M#', 'E#', 'V#', 'Q#', '<eos>']
+        #print(last_hidden)
 
         os.makedirs(f"{folder}/seq_only", exist_ok=True)
         torch.save(last_hidden, f"{folder}/seq_only/{name}_{ch}.pt")
@@ -168,8 +168,8 @@ def generate_embeddings(dssp_dict, name, folder="out/SaProt", no3D=False):
 
             # Last layer hidden states
             last_hidden = all_hidden_states[-1]  # [1, seq_len, hidden_dim]
-            print(last_hidden.shape)
-            print(last_hidden)
+            #print(last_hidden.shape)
+            #print(last_hidden)
             os.makedirs(f"{folder}/full", exist_ok=True)
             torch.save(last_hidden, f"{folder}/full/{name}_{ch}.pt")
             json.dump(dssp_dict[ch], open(f"{folder}/full/{name}_{ch}.json", "w"))

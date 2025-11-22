@@ -300,18 +300,57 @@ if force or train:
 
     bi.log("end", "Plotting")
 
+
+
+
+
+
+
+
 if predict:
     bi.log("start", "Predicting...")
+
     try:
         seq_index = sys.argv.index("-s") + 1
         sequence = sys.argv[seq_index]
     except Exception as e:
         bi.log("error", "no input sequence provided (-s)")
-        sequence = bi.utilities.strings.clean_string(input("Please enter a sequence to predict: \n").replace(" ", ""))
+        sequence = bi.utilities.strings.clean_string(input("Please enter a sequence to predict: \n>>> ").replace(" ", ""))
     if len(sequence) == 0:
         bi.log("error", "No input sequence provided")
         exit()
 
+
+    os.makedirs("pred", exist_ok=True)
+    os.makedirs("pred/inputs", exist_ok=True)
+
+    n = 0
+    fname = f"prediction_{bi.utilities.strings.add_front_0(n, 3)}"
+    while fname + ".json" in os.listdir("pred/inputs"):
+        n += 1
+        fname = f"prediction_{bi.utilities.strings.add_front_0(n, 3)}"
+
+
+    structure = None
+    try:
+        pdb_index = sys.argv.index("-pdb") + 1
+        pdb_code = sys.argv[pdb_index]
+    except Exception as e:
+        bi.log("error", "no pdb code or file provided (-pdb)")
+        pdb_code = bi.utilities.strings.clean_string(input("Please enter a pdb code or file path to compare: \n>>> ").strip())
+    if len(pdb_code) == 0:
+        bi.log("error", "No input pdb provided")
+    elif len(pdb_code) == 4:
+        download_folder = bi.imports.downloadPDB("pred", fname, [pdb_code], file_format="cif")
+        file_path = os.path.join(download_folder, f"{pdb_code}.cif")
+        structure = bi.imports.loadPDB(file_path)
+    else:
+        if os.path.exists(pdb_code):
+            structure = bi.imports.loadPDB(pdb_code)
+        else:
+            bi.log("error", "Provided path does not exist: {}".format(pdb_code))
+            exit()
+    print(structure)
     bi.log("header", "Sequence:")
     dssp = {"A":{str(n):{
         "resn":name,
@@ -319,22 +358,17 @@ if predict:
         "res":n,
     } for n, name in enumerate(sequence)}}
     print("".join([r["resn"] for r in dssp["A"].values()]))
-    os.makedirs("pred", exist_ok=True)
-    os.makedirs("pred/inputs", exist_ok=True)
+    print("length:", len(dssp["A"]))
 
-    n = 0
-    fname = f"prediction_{bi.utilities.strings.add_front_0(n, 3)}"
-    while fname+".json" in os.listdir("pred/inputs"):
-        n += 1
-        fname = f"prediction_{bi.utilities.strings.add_front_0(n, 3)}"
 
     bi.log(1, "Assigned id:", fname)
     json.dump({
         "sequence": "".join([r["resn"] for r in dssp["A"].values()]),
         "dssp": dssp}, open(f"pred/inputs/{fname}.json", "w"))
 
-    print(dssp)
+    #print(dssp)
     generate_embeddings(dssp, fname, folder="pred/SaProt", no3D=True)
+
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -347,17 +381,26 @@ if predict:
     labels_eval = []
 
 
-    embeddings = torch.load(f"pred/SaProt/seq_only/{fname}_A.pt")[0]
+    embeddings = torch.load(f"pred/SaProt/seq_only/{fname}_A.pt")[0][1:-1]
     bi.log(1, "n embeddings:", len(embeddings), embeddings.shape)
     with torch.no_grad():
         for X_batch in embeddings:
             X_batch = X_batch.to(device)
             logits = list(model(X_batch).numpy())
-            print(logits)
+            #print(logits)
             pred = logits.index(max(logits))
             preds.append(pred)
     bi.log("header", "Predictions:")
-    print(preds)
+    print("".join([str(p) for p in preds]))
+
+    if structure is not None:
+        pass
+
+
+
+
+
+
     session = bi.visualisation.pymol.PymolScript(fname, "pred/sessions")
     for n, p in enumerate(preds):
         session.color(f"(resi. {n})", int(p))
