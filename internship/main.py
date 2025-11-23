@@ -400,7 +400,12 @@ if predict:
         for chain in structure.get_chains():
             print(chain)
             for res, p in zip(chain.get_residues(), preds):
-                res.bfactor = int(p)
+                print([a for a in res])
+                try:
+                    ca = [a for a in res if a.id == "CA"][0]
+                    ca.bfactor = int(p)
+                except:
+                    pass
 
     dssp = run_dssp(structure, structure.data["info"]["name"], data_folder=f"pred/{fname}", out_folder=f"pred/{fname}")
     matching_chain = "A"
@@ -425,7 +430,7 @@ if predict:
 
     session = bi.visualisation.pymol.PymolScript(fname, f"pred/{fname}/session")
     session.load_entity(structure)
-    session.spectrum("(all)", "b", "rainbow")
+    session.spectrum("(all)", "b", "rainbow", minimum=0, maximum=7)
     session.write_script()
 
 
