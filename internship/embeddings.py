@@ -1,10 +1,19 @@
 
 import os, sys, subprocess, json
-import numpy as np
-sys.path.append("/home/iain/projects/bioiain")
 
-import src.bioiain as bi
-from src.bioiain.utilities.DSSP import ss_to_index
+try:
+    #import bioiain as bi
+    raise ImportError("bioiain")
+except:
+    try:
+        import importlib
+        sys.path.append("/home/iain/projects/bioiain")
+        import src.bioiain as bi
+        bioiain = bi
+    except:
+        raise ImportError("bioiain")
+
+
 
 
 from transformers import AutoTokenizer, AutoModelForMaskedLM

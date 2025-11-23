@@ -4,22 +4,23 @@ import os, sys, subprocess
 import json
 import numpy as np
 import torch
-from model import MLP
+
 import Bio
 
 
 try:
-    import bioiain as bi
+    raise ImportError("bioiain")
 except:
     try:
-        #import importlib
+        import importlib
         sys.path.append("/home/iain/projects/bioiain")
-        #importlib.import_module("src.bioiain", "bi")
         import src.bioiain as bi
+        bioiain = bi
     except:
         raise ImportError("bioiain")
 print(bi)
-from bioiain.utilities.DSSP import DSSP, ss_to_index, index_to_ss
+print(bioiain)
+from bioiain.utilities.DSSP import ss_to_index, index_to_ss
 from embeddings import run_dssp, run_foldseek, generate_embeddings
 
 
@@ -92,132 +93,124 @@ if force or train:
 
 
 
-
-    all_residues_seq = []
-    all_embeddings_seq = []
-
-    all_residues_struc = []
-    all_embeddings_struc = []
-    num_sequences = 0
-    num_structures = 0
+    curate = not("no-curate" in sys.argv)
     training_structures = []
-    print(len(os.listdir("out/SaProt/seq_only")), len(os.listdir("out/SaProt/full"))/2)
-    for file in sorted(os.listdir("out/SaProt/full"), reverse=True):
+    bi.log("start", "Curating embeddings...")
+    file_n = len(os.listdir("out/SaProt/full"))
+    for n, file in enumerate(sorted(os.listdir("out/SaProt/full"), reverse=True)):
         if not(file.split("_")[0]+".cif" in structure_list):
             continue
         fname = file.split(".")[0]
         if file.endswith(".pt") and os.path.exists(f"out/SaProt/full/{fname}.json") and os.path.exists(f"out/SaProt/seq_only/{fname}.pt"):
-            all_embeddings_struc.append(torch.load(f"out/SaProt/full/{fname}.pt"))
-            all_residues_struc.append(json.load(open(f"out/SaProt/full/{fname}.json")))
-            all_embeddings_seq.append(torch.load(f"out/SaProt/seq_only/{fname}.pt"))
-            num_sequences += 1
-            num_structures += 1
+            if curate:
+                emb_struc = torch.load(f"out/SaProt/full/{fname}.pt")
+                reslist = json.load(open(f"out/SaProt/full/{fname}.json"))
+                emb_seq = torch.load(f"out/SaProt/seq_only/{fname}.pt")
+
+                new_struc = emb_struc[0][1:-1].tolist()
+                new_seq = emb_seq[0][1:-1].tolist()
+                new_lab = []
+                for ress in reslist.values():
+                    # print(ress)
+                    try:
+                        int(ress["res"])
+                        new_lab.append(ss_to_index(ress["ss"]))
+                    except:
+                        #bi.log("warning", "Disordered res:", ress["res"])
+                        new_lab.append(ss_to_index(ress["ss"]))
+                print(len(new_struc), "\t", len(new_seq), "\t", len(new_lab), "\t", fname, f"\t{n}/{file_n}", end="\r")
+
+                try:
+                    assert (len(new_struc) == len(new_seq) == len(new_lab))
+                    training_structures.append(fname)
+                except:
+                    f = f"out/SaProt/full/{fname}.pt"
+                    os.remove(f)
+                    bi.log("error", "Missmatch in file (removed):", f)
+                    continue
             training_structures.append(fname)
-            #print(file)
 
-
-
-    print("Num filels:", num_structures, num_sequences)
-
-
+    print(training_structures[0:3], "...", training_structures[-3:])
     num_structs = len(training_structures)
-
-    bi.log("start")
-
-    total_res = sum([len(r) for r in all_residues_seq])
-    print(total_res)
-    embeddings_struc = []
-    embeddings_seq = []
-    labels = []
-    embs = zip(all_embeddings_struc[0:num_structs], all_embeddings_seq[0:num_structs], all_residues_struc[0:num_structs] )
-    for n, (emb_struc, emb_seq, reslist) in enumerate(embs):
-        new_struc = emb_struc[0][1:-1].tolist()
-        new_seq = emb_seq[0][1:-1].tolist()
-        new_lab = []
-        for ress in reslist.values():
-            #print(ress)
-            try:
-                int(ress["res"])
-                new_lab.append(ss_to_index(ress["ss"]))
-            except:
-                bi.log("warning", "Disordered res:", ress["res"])
-                new_lab.append(ss_to_index(ress["ss"]))
-        print(len(new_struc), len(new_seq), len(new_lab))
-
-        try:
-            assert(len(new_struc) == len(new_seq) == len(new_lab))
-        except:
-            f = f"out/SaProt/full/{training_structures[n]}.pt"
-            os.remove(f)
-            bi.log("error", "Missmatch in file (removed):", f)
-            training_structures.remove(training_structures[n])
-            continue
-        print(len(embeddings_struc))
-        print(len(embeddings_seq))
-        print(len(labels))
-
-        assert(len(embeddings_struc) == len(embeddings_seq) == len(labels))
-        embeddings_struc.extend(new_struc)
-        embeddings_seq.extend(new_seq)
-        labels.extend(new_lab)
-
-        bi.log("end")
-
-        #labels.extend([ss_to_index(ss["ss"]) for ss in labs.values()])
-
-    embeddings_struc = np.array(embeddings_struc)
-    embeddings_seq = np.array(embeddings_seq)
-    labels = np.array(labels)
-    print(len(embeddings_struc))
-    print(len(embeddings_seq))
-    print(len(labels))
-    bi.log("end")
-
-
-
-
-    emb_seq = embeddings_seq
-    emb_struct = embeddings_struc
-    #print(emb_seq[0])
-    print(emb_seq.shape)
-    print(emb_struct.shape)
-    print(labels.shape)
-
-
-
-    #print(emb_seq)
-    #print("#")
-    #print(emb_struct)
-    #print(labels)
+    print("Training structures:", num_structs)
+    bi.log("end", "Curating embeddings")
 
 
 
     class ResidueDataset(Dataset):
-        def __init__(self, embeddings, labels):
-            self.embeddings = torch.tensor(embeddings, dtype=torch.float32)
-            self.labels = torch.tensor(labels, dtype=torch.long)
+        def __init__(self, struc_list, folder, label_folder=None):
+            self.structures = struc_list
+            self.folder = folder
+            if label_folder is None:
+                self.label_folder = folder
+            else:
+                self.label_folder = label_folder
+            #self.embeddings = torch.tensor(embeddings, dtype=torch.float32)
+            #self.labels = torch.tensor(labels, dtype=torch.long)
+            self.current_s = None
+            self.current_e = None
+            self.current_l = None
+            self.pointer = {}
+            self.total = 0
+            for s in self.structures:
+                lp = os.path.join(self.label_folder, f"{s}.json")
+                lj = json.load(open(lp))
+
+                for i, _ in enumerate(lj.keys()):
+                    self.pointer[self.total] = {"s":s, "i":i}
+                    self.total += 1
+
         def __len__(self):
-            return len(self.labels)
+            return self.total
+
         def __getitem__(self, idx):
-            return self.embeddings[idx], self.labels[idx]
+            s, i = self.pointer[idx]["s"], self.pointer[idx]["i"]
+            if s == self.current_s:
+                embeddings = self.current_e
+                labs = self.current_l
+            else:
+                embedding_path = os.path.join(self.folder, f"{s}.pt")
+                label_path = os.path.join(self.label_folder, f"{s}.json")
+
+                embeddings = torch.load(embedding_path)[0][1:-1]
+                label_json = json.load(open(label_path))
+                labs = torch.tensor(np.array([ss_to_index(r["ss"]) for r in label_json.values()]), dtype=torch.long)
+
+                self.current_s = s
+                self.current_e = embeddings
+                self.current_l = labs
+
+            #print(embeddings.shape)
+            #print(labs.shape)
+
+            emb = embeddings[i]
+            lab = labs[i]
+            #print("emb:", emb.shape, "lab:", lab)
+            return emb, lab
+
+
+
+
 
     bi.log("start", "splitting...")
     # Split into train/test
-    emb_train_seq, emb_test_seq, y_train, y_test = train_test_split(emb_seq, labels, test_size=0.2, random_state=42)
-    emb_train_struct, emb_test_struct, _, _ = train_test_split(emb_struct, labels, test_size=0.2, random_state=42)
-    bi.log("start", "moiunting seq data...")
-    train_dataset_seq = ResidueDataset(emb_train_seq, y_train)
-    test_dataset_seq = ResidueDataset(emb_test_seq, y_test)
+    train_list, test_list = train_test_split(training_structures, test_size=0.2, random_state=42)
+
+    bi.log("start", "mounting seq data...")
+    train_dataset_seq = ResidueDataset(train_list, folder="out/SaProt/seq_only", label_folder="out/SaProt/full")
+    test_dataset_seq = ResidueDataset(test_list, folder="out/SaProt/seq_only", label_folder="out/SaProt/full")
     bi.log("start", "mounting struc data...")
-    train_dataset_struct = ResidueDataset(emb_train_struct, y_train)
-    test_dataset_struct = ResidueDataset(emb_test_struct, y_test)
+    train_dataset_struct = ResidueDataset(train_list, folder="out/SaProt/full")
+    test_dataset_struct = ResidueDataset(test_list, folder="out/SaProt/full")
+
     bi.log("start", "loading seq data...")
-    train_loader_seq = DataLoader(train_dataset_seq, batch_size=32, shuffle=True)
-    test_loader_seq = DataLoader(test_dataset_seq, batch_size=32)
+    train_loader_seq = DataLoader(train_dataset_seq, batch_size=24, shuffle=True, num_workers=0)
+    test_loader_seq = DataLoader(test_dataset_seq, batch_size=24, num_workers=0)
     bi.log("start", "loading struc data...")
-    train_loader_struct = DataLoader(train_dataset_struct, batch_size=32, shuffle=True)
-    test_loader_struct = DataLoader(test_dataset_struct, batch_size=32)
+    train_loader_struct = DataLoader(train_dataset_struct, batch_size=24, shuffle=True, num_workers=0)
+    test_loader_struct = DataLoader(test_dataset_struct, batch_size=24, num_workers=0)
     bi.log("end")
+
 
 
 
@@ -225,6 +218,7 @@ if force or train:
     # Training function
     # ---------------------------
     def train_mlp(model, train_loader, test_loader, lr=1e-3, epochs=20):
+        print("training...")
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         model.to(device)
         criterion = nn.CrossEntropyLoss()
@@ -259,7 +253,7 @@ if force or train:
         return model, preds, labels_eval
 
 
-
+    from models import MLP
     os.makedirs("models", exist_ok=True)
     # ---------------------------
     # Train MLP on sequence-only embeddings
@@ -292,8 +286,8 @@ if force or train:
         plt.title(title)
         plt.savefig(f"figs/embeddings_{title}.png")
 
-    plot_embeddings(emb_test_seq, labels_seq, title=f"{data_folder}_sequence_only_N_{len(training_structures)}")
-    plot_embeddings(emb_test_struct, labels_struct, title=f"{data_folder}_sequence_+_3Di_N_{len(training_structures)}")
+    plot_embeddings(test_dataset_seq, labels_seq, title=f"{data_folder}_sequence_only_N_{len(training_structures)}")
+    plot_embeddings(test_dataset_struct, labels_struct, title=f"{data_folder}_sequence_+_3Di_N_{len(training_structures)}")
 
     # Confusion matrices
     def plot_confusion(preds, labels, title="Confusion Matrix"):
