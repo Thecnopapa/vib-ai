@@ -158,13 +158,13 @@ if force or train:
 
             mlp = MLP(input_dim=embedding_dim)
             mlp, preds, labels, score = train_mlp(mlp, train_loader, test_loader, epochs=v["epochs"])
-            torch.save(mlp.state_dict(), f"models/{data_folder}_{k}_N={len(training_structures)}_E={v["epochs"]}_S={score}.pth")
+            torch.save(mlp.state_dict(), f"models/{data_folder}_{k}_N={len(training_structures)}_E={v["epochs"]}_S={score:.3f}.pth")
 
             bi.log("header", "Plotting...")
             os.makedirs("figs", exist_ok=True)
             plot_embeddings(test_dataset, labels,
-                            title=f"{data_folder}_{k}_{len(training_structures)}")
-            plot_confusion(preds, labels, title=f"{data_folder}_{k}_N={len(training_structures)}_E={v["epochs"]}_S={score}")
+                            title=f"{data_folder}_{k}_{len(training_structures)}_E={v["epochs"]}_S={score:.3f}")
+            plot_confusion(preds, labels, title=f"{data_folder}_{k}_N={len(training_structures)}_E={v["epochs"]}_S={score:.3f}")
             bi.log("header", "DONE")
             bi.log("end", f"Training MLP for {k}")
 

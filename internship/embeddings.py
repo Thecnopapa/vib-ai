@@ -23,7 +23,7 @@ def run_dssp(structure, filename, data_folder, out_folder="out/dssp"):
     os.makedirs("out", exist_ok=True)
     os.makedirs(out_folder, exist_ok=True)
 
-    cmd = ["dssp", "--output-format", "dssp", "--verbose", f"{data_folder}/{filename}.cif",
+    cmd = ["mkdssp", "--output-format", "dssp", "--verbose", f"{data_folder}/{filename}.cif",
            f"{out_folder}/{filename}.dssp"]
     print(" ".join(cmd))
     subprocess.run(cmd)
