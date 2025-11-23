@@ -7,11 +7,21 @@ import torch
 from model import MLP
 import Bio
 
-sys.path.append("/home/iain/projects/bioiain")
 
-import src.bioiain as bi
-from src.bioiain.utilities.DSSP import DSSP, ss_to_index, index_to_ss
+try:
+    import bioiain as bi
+except:
+    try:
+        #import importlib
+        sys.path.append("/home/iain/projects/bioiain")
+        #importlib.import_module("src.bioiain", "bi")
+        import src.bioiain as bi
+    except:
+        raise ImportError("bioiain")
+print(bi)
+from bioiain.utilities.DSSP import DSSP, ss_to_index, index_to_ss
 from embeddings import run_dssp, run_foldseek, generate_embeddings
+
 
 
 bi.log("start", "internship > main.py")
