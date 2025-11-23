@@ -10,17 +10,18 @@ from src.bioiain.utilities.DSSP import ss_to_index
 from transformers import AutoTokenizer, AutoModelForMaskedLM
 import torch
 
-def run_dssp(structure, filename, data_folder):
+def run_dssp(structure, filename, data_folder, out_folder="out/dssp"):
     os.makedirs("out", exist_ok=True)
-    os.makedirs("out/dssp", exist_ok=True)
-    "dssp --output-format dssp ./data/{data_folder}/{filename}.cif ./out/dssp/{filename}.dssp"
-    cmd = ["dssp", "--output-format", "dssp", "--verbose", f"./data/{data_folder}/{filename}.cif",
-           f"./out/dssp/{filename}.dssp"]
+    os.makedirs(out_folder, exist_ok=True)
+
+    cmd = ["dssp", "--output-format", "dssp", "--verbose", f"{data_folder}/{filename}.cif",
+           f"{out_folder}/{filename}.dssp"]
+    print(" ".join(cmd))
     subprocess.run(cmd)
 
     dssp_dict = {c.id: {} for c in structure.get_chains()}
     # print(dssp_dict)
-    with open(f"./out/dssp/{filename}.dssp", "r") as f:
+    with open(f"{out_folder}/{filename}.dssp", "r") as f:
         start = False
 
         for line in f:
@@ -42,7 +43,7 @@ def run_dssp(structure, filename, data_folder):
             res = line[5:11].strip()
             ch = line[11]
             resn = line[13].upper()
-            ss = line[16]
+            ss = line[16].replace(" ", "#")
             if line[10] != " ":
                 bi.log("warning", f"Disordered atom: \n {line}")
                 # exit()
@@ -65,7 +66,7 @@ def run_foldseek(structure, filename, dssp_dict, data_folder):
     os.makedirs("out/foldseek", exist_ok=True)
     cmd = ["./SaProt/bin/foldseek",
            "structureto3didescriptor", "-v", "0", "--threads", "4",
-           "--chain-name-mode", "1", f"./data/{data_folder}/{filename}.cif",
+           "--chain-name-mode", "1", f"{data_folder}/{filename}.cif",
            f"./out/foldseek/{filename}.csv"
            ]
     print(" ".join(cmd))

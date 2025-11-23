@@ -5,11 +5,12 @@ import json
 import numpy as np
 import torch
 from model import MLP
+import Bio
 
 sys.path.append("/home/iain/projects/bioiain")
 
 import src.bioiain as bi
-from src.bioiain.utilities.DSSP import DSSP, ss_to_index
+from src.bioiain.utilities.DSSP import DSSP, ss_to_index, index_to_ss
 from embeddings import run_dssp, run_foldseek, generate_embeddings
 
 
@@ -59,9 +60,9 @@ if (force or embeddings) and not predict:
 
         last_chain = [c.id for c in structure.get_chains()][-1]
         if not os.path.exists(f"./out/SaProt/full/{name}_{last_chain}.pt") or force:
-            dssp_dict = run_dssp(structure, name, data_folder)
+            dssp_dict = run_dssp(structure, name, "data/"+data_folder)
             print(dssp_dict.keys())
-            dssp_dict = run_foldseek(structure, name, dssp_dict, data_folder)
+            dssp_dict = run_foldseek(structure, name, dssp_dict, "data/"+data_folder)
             embedding_folder = generate_embeddings(dssp_dict, name)
             print(dssp_dict.keys())
 
@@ -322,14 +323,15 @@ if predict:
 
 
     os.makedirs("pred", exist_ok=True)
-    os.makedirs("pred/inputs", exist_ok=True)
+
 
     n = 0
     fname = f"prediction_{bi.utilities.strings.add_front_0(n, 3)}"
-    while fname + ".json" in os.listdir("pred/inputs"):
+    while os.path.exists(f"pred/{fname}"):
         n += 1
         fname = f"prediction_{bi.utilities.strings.add_front_0(n, 3)}"
 
+    os.makedirs(f"pred/{fname}", exist_ok=True)
 
     structure = None
     try:
@@ -364,10 +366,10 @@ if predict:
     bi.log(1, "Assigned id:", fname)
     json.dump({
         "sequence": "".join([r["resn"] for r in dssp["A"].values()]),
-        "dssp": dssp}, open(f"pred/inputs/{fname}.json", "w"))
+        "dssp": dssp}, open(f"pred/{fname}/{fname}.json", "w"))
 
     #print(dssp)
-    generate_embeddings(dssp, fname, folder="pred/SaProt", no3D=True)
+    generate_embeddings(dssp, fname, folder=f"pred/{fname}/SaProt", no3D=True)
 
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -381,7 +383,7 @@ if predict:
     labels_eval = []
 
 
-    embeddings = torch.load(f"pred/SaProt/seq_only/{fname}_A.pt")[0][1:-1]
+    embeddings = torch.load(f"pred/{fname}/SaProt/seq_only/{fname}_A.pt")[0][2:-2]
     bi.log(1, "n embeddings:", len(embeddings), embeddings.shape)
     with torch.no_grad():
         for X_batch in embeddings:
@@ -392,19 +394,41 @@ if predict:
             preds.append(pred)
     bi.log("header", "Predictions:")
     print("".join([str(p) for p in preds]))
+    print("len:", len(preds))
 
     if structure is not None:
-        pass
+        for chain in structure.get_chains():
+            print(chain)
+            for res, p in zip(chain.get_residues(), preds):
+                res.bfactor = int(p)
+
+    dssp = run_dssp(structure, structure.data["info"]["name"], data_folder=f"pred/{fname}", out_folder=f"pred/{fname}")
+    matching_chain = "A"
+    for ch in dssp.keys():
+        print(ch, len(dssp[ch]), len(preds))
+        if len(dssp[ch]) == len(preds):
+            matching_chain = ch
+    aligner = Bio.Align.PairwiseAligner()
+    print(aligner)
+    al = aligner.align("".join([d["ss"].replace("-", "#") for d in dssp[matching_chain].values()]), "".join([index_to_ss(p) for p in preds]),)
+    print(al[0])
+    with open(f"pred/{fname}/output.txt", "w") as f:
+        f.write("SEQUENCE>\t{}\n".format("".join([r["resn"] for r in dssp["A"].values()])))
+        f.write("PREDICT >\t{}\n".format("".join([index_to_ss(p) for p in preds])))
+        if matching_chain is not None:
+            f.write("DSSP    >\t{}\n".format("".join([d["ss"] for d in dssp[matching_chain].values()])))
+        f.write(f"\n\n\nAlignment (score: {al[0].score})/{len(al[0].query)}\n")
+        f.write(str(al[0]))
 
 
 
 
-
-
-    session = bi.visualisation.pymol.PymolScript(fname, "pred/sessions")
-    for n, p in enumerate(preds):
-        session.color(f"(resi. {n})", int(p))
+    session = bi.visualisation.pymol.PymolScript(fname, f"pred/{fname}/session")
+    session.load_entity(structure)
+    session.spectrum("(all)", "b", "rainbow")
     session.write_script()
+
+
 
     bi.log("end")
 
