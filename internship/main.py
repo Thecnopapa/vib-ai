@@ -33,6 +33,7 @@ force = "force" in sys.argv
 embeddings = "embeddings" in sys.argv
 train = "train" in sys.argv
 predict = "predict" in sys.argv
+curate = not("no-curate" in sys.argv)
 
 np.random.seed(0)
 num_residues = 255
@@ -67,8 +68,6 @@ if (force or embeddings) and not predict:
         structure.pass_down()
         bi.log("header", structure)
 
-
-
         last_chain = [c.id for c in structure.get_chains()][-1]
         if not os.path.exists(f"./out/SaProt/full/{name}_{last_chain}.pt") or force:
             dssp_dict = run_dssp(structure, name, "data/"+data_folder)
@@ -82,18 +81,14 @@ if (force or embeddings) and not predict:
 
 if force or train:
 
-    import torch.nn as nn
-    import torch.optim as optim
-    from torch.utils.data import Dataset, DataLoader
-    from sklearn.model_selection import train_test_split
-    from sklearn.decomposition import PCA
-    from sklearn.metrics import confusion_matrix, accuracy_score, classification_report
-    import matplotlib.pyplot as plt
-    import seaborn as sb
+
+    from training import train_mlp, split_sample
+    from plotting import plot_confusion, plot_embeddings
+    from models import MLP
 
 
 
-    curate = not("no-curate" in sys.argv)
+
     training_structures = []
     bi.log("start", "Curating embeddings...")
     file_n = len(os.listdir("out/SaProt/full"))
@@ -136,178 +131,42 @@ if force or train:
     bi.log("end", "Curating embeddings")
 
 
+    config = {
+        "seq": {
+            "folder": "out/SaProt/seq_only",
+            "label_folder": "out/SaProt/full",
+            "active": False,
+            "epochs": 20,
+            "test_ratio": 0.2,
+        },
+        "struct": {
+            "folder": "out/SaProt/full",
+            "label_folder": None,
+            "active": True,
+            "epochs": 2,
+            "test_ratio": 0.2,
+        }
+    }
 
-    class ResidueDataset(Dataset):
-        def __init__(self, struc_list, folder, label_folder=None):
-            self.structures = struc_list
-            self.folder = folder
-            if label_folder is None:
-                self.label_folder = folder
-            else:
-                self.label_folder = label_folder
-            #self.embeddings = torch.tensor(embeddings, dtype=torch.float32)
-            #self.labels = torch.tensor(labels, dtype=torch.long)
-            self.current_s = None
-            self.current_e = None
-            self.current_l = None
-            self.pointer = {}
-            self.total = 0
-            for s in self.structures:
-                lp = os.path.join(self.label_folder, f"{s}.json")
-                lj = json.load(open(lp))
+    for k, v in config.items():
+        if v["active"]:
+            bi.log("start", f"Training MLP for: {k}")
 
-                for i, _ in enumerate(lj.keys()):
-                    self.pointer[self.total] = {"s":s, "i":i}
-                    self.total += 1
+            train_loader, test_loader, train_dataset, test_dataset = split_sample(training_structures, v["folder"], v["label_folder"], test_ratio=v["test_ratio"])
 
-        def __len__(self):
-            return self.total
+            os.makedirs("models", exist_ok=True)
 
-        def __getitem__(self, idx):
-            s, i = self.pointer[idx]["s"], self.pointer[idx]["i"]
-            if s == self.current_s:
-                embeddings = self.current_e
-                labs = self.current_l
-            else:
-                embedding_path = os.path.join(self.folder, f"{s}.pt")
-                label_path = os.path.join(self.label_folder, f"{s}.json")
+            mlp = MLP(input_dim=embedding_dim)
+            mlp, preds, labels, score = train_mlp(mlp, train_loader, test_loader, epochs=v["epochs"])
+            torch.save(mlp.state_dict(), f"models/{data_folder}_{k}_N={len(training_structures)}_E={v["epochs"]}_S={score}.pth")
 
-                embeddings = torch.load(embedding_path)[0][1:-1]
-                label_json = json.load(open(label_path))
-                labs = torch.tensor(np.array([ss_to_index(r["ss"]) for r in label_json.values()]), dtype=torch.long)
-
-                self.current_s = s
-                self.current_e = embeddings
-                self.current_l = labs
-
-            #print(embeddings.shape)
-            #print(labs.shape)
-
-            emb = embeddings[i]
-            lab = labs[i]
-            #print("emb:", emb.shape, "lab:", lab)
-            return emb, lab
-
-
-
-
-
-    bi.log("start", "splitting...")
-    # Split into train/test
-    train_list, test_list = train_test_split(training_structures, test_size=0.2, random_state=42)
-
-    bi.log("start", "mounting seq data...")
-    train_dataset_seq = ResidueDataset(train_list, folder="out/SaProt/seq_only", label_folder="out/SaProt/full")
-    test_dataset_seq = ResidueDataset(test_list, folder="out/SaProt/seq_only", label_folder="out/SaProt/full")
-    bi.log("start", "mounting struc data...")
-    train_dataset_struct = ResidueDataset(train_list, folder="out/SaProt/full")
-    test_dataset_struct = ResidueDataset(test_list, folder="out/SaProt/full")
-
-    bi.log("start", "loading seq data...")
-    train_loader_seq = DataLoader(train_dataset_seq, batch_size=24, shuffle=True, num_workers=0)
-    test_loader_seq = DataLoader(test_dataset_seq, batch_size=24, num_workers=0)
-    bi.log("start", "loading struc data...")
-    train_loader_struct = DataLoader(train_dataset_struct, batch_size=24, shuffle=True, num_workers=0)
-    test_loader_struct = DataLoader(test_dataset_struct, batch_size=24, num_workers=0)
-    bi.log("end")
-
-
-
-
-    # ---------------------------
-    # Training function
-    # ---------------------------
-    def train_mlp(model, train_loader, test_loader, lr=1e-3, epochs=20):
-        print("training...")
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        model.to(device)
-        criterion = nn.CrossEntropyLoss()
-        optimizer = optim.Adam(model.parameters(), lr=lr)
-
-        best_acc = 0
-        for epoch in range(epochs):
-            model.train()
-            for X_batch, y_batch in train_loader:
-                X_batch, y_batch = X_batch.to(device), y_batch.to(device)
-                optimizer.zero_grad()
-                logits = model(X_batch)
-                loss = criterion(logits, y_batch)
-                loss.backward()
-                optimizer.step()
-
-            # Evaluate
-            model.eval()
-            preds = []
-            labels_eval = []
-            with torch.no_grad():
-                for X_batch, y_batch in test_loader:
-                    X_batch = X_batch.to(device)
-                    logits = model(X_batch)
-                    pred = logits.argmax(dim=1).cpu().numpy()
-                    preds.extend(pred)
-                    labels_eval.extend(y_batch.numpy())
-            acc = accuracy_score(labels_eval, preds)
-            if acc > best_acc:
-                best_acc = acc
-            print(f"Epoch {epoch+1}, Test accuracy: {acc:.3f}")
-        return model, preds, labels_eval
-
-
-    from models import MLP
-    os.makedirs("models", exist_ok=True)
-    # ---------------------------
-    # Train MLP on sequence-only embeddings
-    # ---------------------------
-    bi.log("start", "Training MLP on sequence-only embeddings...")
-    mlp_seq = MLP(input_dim=embedding_dim)
-    mlp_seq, preds_seq, labels_seq = train_mlp(mlp_seq, train_loader_seq, test_loader_seq)
-    torch.save(mlp_seq.state_dict(), f"models/{data_folder}_seq.pth")
-    bi.log("end", "Training MLP on sequence+3Di embeddings")
-
-    # ---------------------------
-    # Train MLP on structure-aware embeddings
-    # ---------------------------
-    bi.log("start", "Training MLP on sequence+3Di embeddings...")
-    mlp_struct = MLP(input_dim=embedding_dim)
-    mlp_struct, preds_struct, labels_struct = train_mlp(mlp_struct, train_loader_struct, test_loader_struct)
-    torch.save(mlp_seq.state_dict(), f"models/{data_folder}_struct.pth")
-    bi.log("end", "Training MLP on sequence+3Di embeddings")
-
-    bi.log("start", "Plotting...")
-    # ---------------------------
-    # Visualization
-    # ---------------------------
-    os.makedirs("figs", exist_ok=True)
-    def plot_embeddings(embeddings, labels, title="Embedding PCA"):
-        pca = PCA(n_components=2)
-        emb_2d = pca.fit_transform(embeddings)
-        plt.figure(figsize=(12,10))
-        sb.scatterplot(x=emb_2d[:,0], y=emb_2d[:,1], hue=labels, palette="Set1", s=40, alpha=0.8)
-        plt.title(title)
-        plt.savefig(f"figs/embeddings_{title}.png")
-
-    plot_embeddings(test_dataset_seq, labels_seq, title=f"{data_folder}_sequence_only_N_{len(training_structures)}")
-    plot_embeddings(test_dataset_struct, labels_struct, title=f"{data_folder}_sequence_+_3Di_N_{len(training_structures)}")
-
-    # Confusion matrices
-    def plot_confusion(preds, labels, title="Confusion Matrix"):
-        cm = confusion_matrix(labels, preds)
-        plt.figure(figsize=(8,8))
-        sb.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=['H','B','E','G',"I","T","S","-"], yticklabels=['H','B','E','G',"I","T","S","-"])
-        plt.xlabel("Predicted")
-        plt.ylabel("True")
-        plt.title(title)
-        plt.savefig(f"figs/confusion_{title}.png")
-
-    plot_confusion(preds_seq, labels_seq, title=f"{data_folder}_sequence_only_N_{len(training_structures)}")
-    plot_confusion(preds_struct, labels_struct, title=f"{data_folder}_sequence_+_3Di_N_{len(training_structures)}")
-
-
-    bi.log("end", "Plotting")
-
-
-
-
+            bi.log("header", "Plotting...")
+            os.makedirs("figs", exist_ok=True)
+            plot_embeddings(test_dataset, labels,
+                            title=f"{data_folder}_{k}_{len(training_structures)}")
+            plot_confusion(preds, labels, title=f"{data_folder}_{k}_N={len(training_structures)}_E={v["epochs"]}_S={score}")
+            bi.log("header", "DONE")
+            bi.log("end", f"Training MLP for {k}")
 
 
 

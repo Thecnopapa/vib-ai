@@ -70,13 +70,12 @@ def run_dssp(structure, filename, data_folder, out_folder="out/dssp"):
 
 def run_foldseek(structure, filename, dssp_dict, data_folder):
     bi.log(2, "running foldseek...")
-    "./SaProt/bin/foldseek structureto3didescriptor -v 0 --threads 1 --chain-name-mode 1 ./data/other/1M2Z.cif ./out/foldseek/1M2Z.tsv"
     os.makedirs("out", exist_ok=True)
     os.makedirs("out/foldseek", exist_ok=True)
-    cmd = ["./SaProt/bin/foldseek",
+    cmd = ["bin/foldseek",
            "structureto3didescriptor", "-v", "0", "--threads", "4",
            "--chain-name-mode", "1", f"{data_folder}/{filename}.cif",
-           f"./out/foldseek/{filename}.csv"
+           f"out/foldseek/{filename}.csv"
            ]
     print(" ".join(cmd))
     subprocess.run(cmd)

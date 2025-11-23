@@ -92,7 +92,7 @@ if [[ $* == *"init"* ]]; then
 #end:$PROJECT_NAME\n"
 	sed -i "${START}i \
 		$SCRIPT" $RCFILE
-	echo "* Reinitailising conda" 
+	echo "* Reinitailising conda"
 	conda init $SHELL &&
 	echo "* Init complete!"
 	echo "* Type $RUN_COMMAND to start using the setup"
@@ -215,3 +215,6 @@ test(){
 }
 
 
+count(){
+  cloc --include-lang=Python --by-file-by-lang .
+}
