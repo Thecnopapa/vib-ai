@@ -210,12 +210,13 @@ __marimo__/
 
 .idea
 internship/SaProt
-internship/data
+internship/data/*/
 internship/out
 internship/exports
 internship/models
 internship/pred
 internship/figs
+internship/bin
 Internship-src/Dataset
 Internship-src/foldseek
 
