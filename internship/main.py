@@ -9,8 +9,6 @@ import Bio
 
 
 local_bi = "local-bi" in sys.argv
-
-
 try:
     import bioiain
     import bioiain as bi

@@ -1,0 +1,38 @@
+{
+    "embeddings": {
+        "SaProt_full":{
+            "model": "SaProt",
+            "mode": "full",
+            "dimensions": 480,
+            "save_folder": "out/SaProt/full"
+        },
+        "SaProt_seq": {
+            "model": "SaProt",
+            "mode": "seq",
+            "dimensions": 480,
+            "save_folder": "out/SaProt/seq"
+        }
+    },
+    "labels": {
+        "dssp": {
+            "folder": "out/SaProt/full"
+        }
+    },
+    "training": {
+        "SaProt_full": {
+            "embeddings": "SaProt_full",
+            "epochs": 20,
+            "batch_size": 32,
+            "shuffle": false,
+            "test_ratio": 0.2
+        },
+        "SaProt_seq": {
+            "embeddings": "SaProt_seq",
+            "epochs": 20,
+            "batch_size": 32,
+            "shuffle": false,
+            "test_ratio": 0.2
+        }
+
+    }
+}

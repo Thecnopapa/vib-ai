@@ -3,10 +3,12 @@ import os, sys, subprocess, json
 import numpy as np
 from bioiain.utilities.DSSP import ss_to_index
 
-
+local_bi = "local-bi" in sys.argv
 try:
-    #import bioiain as bi
-    raise ImportError("bioiain")
+    import bioiain
+    import bioiain as bi
+    if local_bi:
+        raise ImportError("bioiain")
 except:
     try:
         import importlib
@@ -15,7 +17,6 @@ except:
         bioiain = bi
     except:
         raise ImportError("bioiain")
-
 
 import torch
 import torch.nn as nn
