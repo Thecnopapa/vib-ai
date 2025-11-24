@@ -2,18 +2,14 @@
 import os, sys, subprocess
 
 import json
-import numpy as np
-import torch
-
-import Bio
 
 
 local_bi = "local-bi" in sys.argv
 try:
-    import bioiain
-    import bioiain as bi
     if local_bi:
         raise ImportError("bioiain")
+    import bioiain
+    import bioiain as bi
 except:
     try:
         import importlib
@@ -32,23 +28,41 @@ from embeddings import run_dssp, run_foldseek, generate_embeddings
 bi.log("start", "internship > main.py")
 
 
+
+
 skip_download = "no-download" in sys.argv
-force = "force" in sys.argv
-embeddings = "embeddings" in sys.argv
-train = "train" in sys.argv
-predict = "predict" in sys.argv
+force = "force" in sys.argv or "-f" in sys.argv
+embeddings = "embeddings" in sys.argv or "-e" in sys.argv
+train = "train" in sys.argv or "-t" in sys.argv
+predict = "predict" in sys.argv or "-p" in sys.argv
 curate = not("no-curate" in sys.argv)
 
-np.random.seed(0)
-num_residues = 255
-embedding_dim = 480
+
+from setup import config
+
+import numpy as np
+import torch
+import Bio
+
+np.random.seed(config["general"]["np_random"])
+
+
 
 if not predict:
-    data_folder="receptors"
-    pdb_list_file = "data/receptors.txt"
-    if "mega" in sys.argv:
-        data_folder = "mega-batch"
-        pdb_list_file = "data/mega-batch20K.txt"
+    if "--data" in sys.argv:
+        try:
+            dataset = sys.argv[sys.argv.index("--data") + 1]
+        except:
+            bi.log("error", "Dataset not provided")
+            exit()
+    else:
+        dataset = config["data"]["default"]
+    bi.log("header", "Using dataset:", dataset)
+    try:
+        data_folder=config["data"][dataset]["folder_name"]
+        pdb_list_file = config["data"][dataset]["pdb_list"]
+    except:
+        bi.log("error", f"Dataset not configured: {dataset}")
 
     if skip_download:
         file_folder = f"data/{data_folder}"
@@ -59,7 +73,7 @@ if not predict:
 
     structure_list = sorted(os.listdir(file_folder))
 
-if (force or embeddings) and not predict:
+if embeddings:
 
     for file in structure_list:
 
@@ -83,7 +97,7 @@ if (force or embeddings) and not predict:
 
 
 
-if force or train:
+if train:
 
 
     from training import train_mlp, split_sample

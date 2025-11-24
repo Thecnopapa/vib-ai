@@ -5,10 +5,10 @@ from bioiain.utilities.DSSP import ss_to_index
 
 local_bi = "local-bi" in sys.argv
 try:
-    import bioiain
-    import bioiain as bi
     if local_bi:
         raise ImportError("bioiain")
+    import bioiain
+    import bioiain as bi
 except:
     try:
         import importlib

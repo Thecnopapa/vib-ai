@@ -1,14 +1,15 @@
 
 import os, sys, subprocess, json
 
-
+from setup import config
 
 local_bi = "local-bi" in sys.argv
 try:
-    import bioiain
-    import bioiain as bi
     if local_bi:
         raise ImportError("bioiain")
+    import bioiain
+    import bioiain as bi
+
 except:
     try:
         import importlib
@@ -75,7 +76,7 @@ def run_foldseek(structure, filename, dssp_dict, data_folder):
     bi.log(2, "running foldseek...")
     os.makedirs("out", exist_ok=True)
     os.makedirs("out/foldseek", exist_ok=True)
-    cmd = ["foldseek",
+    cmd = [config["general"]["foldseek"],
            "structureto3didescriptor", "-v", "0", "--threads", "4",
            "--chain-name-mode", "1", f"{data_folder}/{filename}.cif",
            f"out/foldseek/{filename}.csv"

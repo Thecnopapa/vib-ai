@@ -152,7 +152,7 @@ prompt_setup(){
       echo "96"
     fi
   }
-  PS1="${YELLOW}@\u${EC} ${CYAN}(\[\e[$(git_pushed)m\]${PROJECT_NAME}${CYAN}\[\e[$(git_commits)m\]-${GIT_BRANCH}${EC}${CYAN})${GREEN} ($(echo "${CONDA_PREFIX}" | rev | cut -d "/" -f1| rev))${BLUE}:\w ${EC}$ "
+  PS1="${YELLOW}\u@\h${EC} ${CYAN}(\[\e[$(git_pushed)m\]${PROJECT_NAME}${CYAN}\[\e[$(git_commits)m\]-${GIT_BRANCH}${EC}${CYAN})${GREEN} ($(echo "${CONDA_PREFIX}" | rev | cut -d "/" -f1| rev))${BLUE}:\w ${EC}$ "
 }
 
 

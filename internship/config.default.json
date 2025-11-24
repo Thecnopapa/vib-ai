@@ -1,4 +1,23 @@
 {
+    "general":{
+        "device": "cpu",
+        "foldseek": "foldseek",
+        "dssp": "mkdssp",
+        "np_random": 0
+
+    },
+    "data": {
+        "default": "receptors",
+        "receptors": {
+            "pdb_list": "data/receptors.txt",
+            "folder_name": "receptors"
+        },
+        "mega-batch": {
+            "pdb_list": "data/mega-batch20K.txt",
+            "folder_name": "mega-batch"
+        }
+    },
+
     "embeddings": {
         "SaProt_full":{
             "model": "SaProt",
@@ -33,6 +52,8 @@
             "shuffle": false,
             "test_ratio": 0.2
         }
+    },
+    "predict": {
 
     }
 }
