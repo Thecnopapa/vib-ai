@@ -103,6 +103,7 @@ def split_sample(array, folder, label_folder=None, test_ratio=0.2):
 def train_mlp(model, train_loader, test_loader, lr=1e-3, epochs=20):
     bi.log(1, "Training MLP...")
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device = "cpu"
     model.to(device)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=lr)
