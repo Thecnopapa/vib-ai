@@ -216,7 +216,8 @@ internship/exports
 internship/models
 internship/pred
 internship/figs
-internship/bin
+internship/bin/foldseek
+internship/bin/dssp
 Internship-src/Dataset
 Internship-src/foldseek
 
