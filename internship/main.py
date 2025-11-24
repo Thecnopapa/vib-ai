@@ -3,25 +3,12 @@ import os, sys, subprocess
 
 import json
 
+import setup
+setup.init()
+from setup import bioiain, bi, config
 
-local_bi = "local-bi" in sys.argv
-try:
-    if local_bi:
-        raise ImportError("bioiain")
-    import bioiain
-    import bioiain as bi
-except:
-    try:
-        import importlib
-        sys.path.append("/home/iain/projects/bioiain")
-        import src.bioiain as bi
-        bioiain = bi
-    except:
-        raise ImportError("bioiain")
-print(bi)
-print(bioiain)
 from bioiain.utilities.DSSP import ss_to_index, index_to_ss
-from embeddings import run_dssp, run_foldseek, generate_embeddings
+from embeddings import run_foldseek, generate_embeddings
 
 
 
@@ -30,15 +17,15 @@ bi.log("start", "internship > main.py")
 
 
 
-skip_download = "no-download" in sys.argv
-force = "force" in sys.argv or "-f" in sys.argv
-embeddings = "embeddings" in sys.argv or "-e" in sys.argv
-train = "train" in sys.argv or "-t" in sys.argv
-predict = "predict" in sys.argv or "-p" in sys.argv
-curate = not("no-curate" in sys.argv)
+skip_download = "--no-download" in sys.argv
+force = "-f" in sys.argv
+embeddings = "-e" in sys.argv
+train = "-t" in sys.argv
+predict = "-p" in sys.argv
+curate = not("--no-curate" in sys.argv)
 
 
-from setup import config
+
 
 import numpy as np
 import torch
@@ -49,6 +36,7 @@ np.random.seed(config["general"]["np_random"])
 
 
 if not predict:
+    bi.log("start", "Data Load")
     if "--data" in sys.argv:
         try:
             dataset = sys.argv[sys.argv.index("--data") + 1]
@@ -58,42 +46,61 @@ if not predict:
     else:
         dataset = config["data"]["default"]
     bi.log("header", "Using dataset:", dataset)
+    config["data"]["selected"] = config["data"][dataset]
     try:
         data_folder=config["data"][dataset]["folder_name"]
         pdb_list_file = config["data"][dataset]["pdb_list"]
     except:
         bi.log("error", f"Dataset not configured: {dataset}")
+        exit()
 
     if skip_download:
         file_folder = f"data/{data_folder}"
     else:
         file_folder = bi.imports.downloadPDB("./data", data_folder, file_path=pdb_list_file, file_format="cif", overwrite=False)
 
-    bi.log(1, "File folder:", file_folder)
+    bi.log("header", "File folder:", file_folder)
 
     structure_list = sorted(os.listdir(file_folder))
+    bi.log("end", "Data Load")
 
 if embeddings:
-
+    bi.log("start", "Labels and Embeddings")
     for file in structure_list:
-
         name = file.split(".")[0]
 
-        structure = None
-        #structure = bi.imports.recover("1MOT")
-
         structure = bi.imports.loadPDB(os.path.join(file_folder, f"{name}.cif"))
-        structure.pass_down()
-        bi.log("header", structure)
+        bi.log(1, "Structure:",  structure)
 
         last_chain = [c.id for c in structure.get_chains()][-1]
-        if not os.path.exists(f"./out/SaProt/full/{name}_{last_chain}.pt") or force:
-            dssp_dict = run_dssp(structure, name, "data/"+data_folder)
-            print(dssp_dict.keys())
-            dssp_dict = run_foldseek(structure, name, dssp_dict, "data/"+data_folder)
-            embedding_folder = generate_embeddings(dssp_dict, name)
-            print(dssp_dict.keys())
+        bi.log(2, "Last Chain:", last_chain)
 
+        if "--labels" in sys.argv:
+            label_method = sys.argv[sys.argv.index("--labels") + 1]
+        else:
+            label_method = config["labels"]["default"]
+        bi.log(1, "Label method:", label_method)
+        config["labels"]["selected"] = config["labels"][label_method]
+        label_folder = config["labels"][label_method]["save_folder"]
+        bi.log(2, "Label folder:", label_folder)
+        if not os.path.exists(os.path.join(label_folder, f"/{name}_{last_chain}.labels.json")) or force:
+            # label_dict = run_dssp(structure, name, "data/" + data_folder)
+            bi.log(2, "Generating Labels...")
+            from labels import generate_labels
+            generate_labels(name, structure)
+            exit()
+
+        if "--embedding" in sys.argv:
+            embedding_method = sys.argv[sys.argv.index("--embedding") + 1]
+        else:
+            embedding_method = config["embeddings"]["default"]
+        emb_save_folder = config["embeddings"][embedding_method]["save_folder"]
+        emb_path = os.path.join(emb_save_folder, f"/{name}_{last_chain}.pt")
+
+        if not os.path.exists(emb_path) or force:
+            # embedding_folder = generate_embeddings(dssp_dict, name)
+            generate_embeddings(config["embeddings"][embedding_method], name)
+    bi.log("end", "Labels and Embeddings")
 
 
 

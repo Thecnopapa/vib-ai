@@ -1,75 +1,16 @@
 
 import os, sys, subprocess, json
 
-from setup import config
+from setup import config, bi, bioiain
 
-local_bi = "local-bi" in sys.argv
-try:
-    if local_bi:
-        raise ImportError("bioiain")
-    import bioiain
-    import bioiain as bi
 
-except:
-    try:
-        import importlib
-        sys.path.append("/home/iain/projects/bioiain")
-        import src.bioiain as bi
-        bioiain = bi
-    except:
-        raise ImportError("bioiain")
+
 
 
 from transformers import AutoTokenizer, AutoModelForMaskedLM
 import torch
 
-def run_dssp(structure, filename, data_folder, out_folder="out/dssp"):
-    os.makedirs("out", exist_ok=True)
-    os.makedirs(out_folder, exist_ok=True)
 
-    cmd = ["mkdssp", "--output-format", "dssp", "--verbose", f"{data_folder}/{filename}.cif",
-           f"{out_folder}/{filename}.dssp"]
-    print(" ".join(cmd))
-    subprocess.run(cmd)
-
-    dssp_dict = {c.id: {} for c in structure.get_chains()}
-    # print(dssp_dict)
-    with open(f"{out_folder}/{filename}.dssp", "r") as f:
-        start = False
-
-        for line in f:
-
-            if "#  " in line:
-                start = True
-                continue
-            if not start:
-                continue
-            l = line.split(" ")
-            l = [cl for cl in l if cl != ""]
-
-            # res = l[1]
-            # ch = l[2]
-            # resn = l[3]
-            # ss = l[4]
-            if "!" in line:
-                continue
-            res = line[5:11].strip()
-            ch = line[11]
-            resn = line[13].upper()
-            ss = line[16].replace(" ", "#")
-            if line[10] != " ":
-                bi.log("warning", f"Disordered atom: \n {line}")
-                # exit()
-                # continue
-
-            # print(ch, res, resn, ss)
-
-            dssp_dict[ch][res] = {"res": res, "resn": resn, "ss": ss}
-    if not start:
-        bi.log("error", "Error reading DSSP file")
-        exit()
-
-    return dssp_dict
 
 
 def run_foldseek(structure, filename, dssp_dict, data_folder):

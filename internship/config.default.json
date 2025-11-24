@@ -17,7 +17,15 @@
             "folder_name": "mega-batch"
         }
     },
-
+    "labels": {
+        "default": "dssp",
+        "dssp": {
+            "method": "dssp",
+            "save_folder": "labels/dssp",
+            "raw_folder": "raw/dssp",
+            "abbreviation": "ss"
+        }
+    },
     "embeddings": {
         "SaProt_full":{
             "model": "SaProt",
@@ -32,12 +40,9 @@
             "save_folder": "out/SaProt/seq"
         }
     },
-    "labels": {
-        "dssp": {
-            "folder": "out/SaProt/full"
-        }
-    },
+
     "training": {
+        "default": "SaProt_full",
         "SaProt_full": {
             "embeddings": "SaProt_full",
             "epochs": 20,

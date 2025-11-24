@@ -216,9 +216,11 @@ internship/exports
 internship/models
 internship/pred
 internship/figs
+internship/raw
+internship/labels
 internship/bin/foldseek
 internship/bin/dssp
-Internship-src/Dataset
-Internship-src/foldseek
+
+config.custom.json
 
 */*.swp

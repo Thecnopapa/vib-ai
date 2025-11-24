@@ -1,22 +1,9 @@
 
 import os, sys, subprocess, json
 import numpy as np
-from bioiain.utilities.DSSP import ss_to_index
 
-local_bi = "local-bi" in sys.argv
-try:
-    if local_bi:
-        raise ImportError("bioiain")
-    import bioiain
-    import bioiain as bi
-except:
-    try:
-        import importlib
-        sys.path.append("/home/iain/projects/bioiain")
-        import src.bioiain as bi
-        bioiain = bi
-    except:
-        raise ImportError("bioiain")
+from setup import bioiain, bi, config
+from bioiain.utilities.DSSP import ss_to_index
 
 import torch
 import torch.nn as nn
