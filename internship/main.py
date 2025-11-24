@@ -2,6 +2,8 @@
 import os, sys, subprocess
 
 import json
+import numpy as np
+
 
 import setup
 setup.init()
@@ -15,8 +17,6 @@ from embeddings import run_foldseek, generate_embeddings
 bi.log("start", "internship > main.py")
 
 
-
-
 skip_download = "--no-download" in sys.argv
 force = "-f" in sys.argv
 embeddings = "-e" in sys.argv
@@ -26,10 +26,6 @@ curate = not("--no-curate" in sys.argv)
 
 
 
-
-import numpy as np
-import torch
-import Bio
 
 np.random.seed(config["general"]["np_random"])
 
@@ -106,7 +102,7 @@ if embeddings:
 
 if train:
 
-
+    import torch
     from training import train_mlp, split_sample
     from plotting import plot_confusion, plot_embeddings
     from models import MLP
@@ -198,6 +194,8 @@ if train:
 
 if predict:
     from models import MLP
+
+    import Bio
     bi.log("start", "Predicting...")
 
     try:
