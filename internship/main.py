@@ -178,6 +178,7 @@ if force or train:
 
 
 if predict:
+    from models import MLP
     bi.log("start", "Predicting...")
 
     try:
@@ -242,6 +243,7 @@ if predict:
 
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device = "cpu"
 
     model_path = "models/mega-batch_struct.pth"
     model = MLP(input_dim=embedding_dim)

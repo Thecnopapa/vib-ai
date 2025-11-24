@@ -128,6 +128,7 @@ def generate_embeddings(dssp_dict, name, folder="out/SaProt", no3D=False):
         # Load model directly
 
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        device = "cpu"
 
         tokenizer = AutoTokenizer.from_pretrained("westlake-repl/SaProt_35M_AF2")
         model = AutoModelForMaskedLM.from_pretrained("westlake-repl/SaProt_35M_AF2")
