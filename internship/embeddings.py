@@ -1,9 +1,14 @@
 
 import os, sys, subprocess, json
 
+
+
+local_bi = "local-bi" in sys.argv
 try:
-    #import bioiain as bi
-    raise ImportError("bioiain")
+    import bioiain
+    import bioiain as bi
+    if local_bi:
+        raise ImportError("bioiain")
 except:
     try:
         import importlib
@@ -12,8 +17,6 @@ except:
         bioiain = bi
     except:
         raise ImportError("bioiain")
-
-
 
 
 from transformers import AutoTokenizer, AutoModelForMaskedLM

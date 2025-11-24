@@ -8,8 +8,14 @@ import torch
 import Bio
 
 
+local_bi = "local-bi" in sys.argv
+
+
 try:
-    raise ImportError("bioiain")
+    import bioiain
+    import bioiain as bi
+    if local_bi:
+        raise ImportError("bioiain")
 except:
     try:
         import importlib
