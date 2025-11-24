@@ -88,7 +88,7 @@ if embeddings:
             bi.log(2, "Generating Labels...")
             from labels import generate_labels
             generate_labels(name, structure)
-            exit()
+        continue # TODO: Config modular embeddings
 
         if "--embedding" in sys.argv:
             embedding_method = sys.argv[sys.argv.index("--embedding") + 1]
