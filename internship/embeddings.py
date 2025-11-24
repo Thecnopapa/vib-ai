@@ -75,7 +75,7 @@ def run_foldseek(structure, filename, dssp_dict, data_folder):
     bi.log(2, "running foldseek...")
     os.makedirs("out", exist_ok=True)
     os.makedirs("out/foldseek", exist_ok=True)
-    cmd = ["bin/foldseek",
+    cmd = ["foldseek",
            "structureto3didescriptor", "-v", "0", "--threads", "4",
            "--chain-name-mode", "1", f"{data_folder}/{filename}.cif",
            f"out/foldseek/{filename}.csv"
