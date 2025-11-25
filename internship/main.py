@@ -58,7 +58,7 @@ if not predict:
 
     bi.log("header", "File folder:", file_folder)
 
-    structure_list = sorted(os.listdir(file_folder))
+    structure_list = sorted([f for f in os.listdir(file_folder) if ".swp" not in f])
     bi.log("end", "Data Load")
 
 if embeddings:

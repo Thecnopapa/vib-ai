@@ -74,7 +74,7 @@ def run_foldseek(filename, data_folder, raw_folder, label_folder):
             if ch in done_chains:
                 continue
             done_chains.append(ch)
-            #print(ch)
+            print(ch)
 
 
             rns, tks = line.split("\t")[1:3]
@@ -113,8 +113,9 @@ def run_saprot(name, mode, foldseek_path, label_path, save_folder):
         assert label_dict.keys() == foldsek_dict.keys()
 
     seqs = {}
-    for ch in label_dict.keys():
-        bi.log(4, "Merging foldseek_dict:", ch)
+    print(label_dict.keys(), foldsek_dict.keys())
+    for ch, fch in zip(label_dict.keys(), foldsek_dict.keys()):
+        bi.log(4, "Merging foldseek_dict:", ch, fch)
         if mode == "full":
             if foldsek_dict[ch] is None:
                 bi.log("warning", f"chain {ch} has no foldseek data")
@@ -131,7 +132,7 @@ def run_saprot(name, mode, foldseek_path, label_path, save_folder):
             seqs[ch] = [f"{l["resn"]}#" for l in label_dict[ch]]
         else:
             bi.log("error", "Unknown SaProt mode:", mode)
-    #print(seqs.keys())
+    print("FOLDSEEK", seqs.keys())
 
 
     for ch in seqs.keys():

@@ -15,7 +15,7 @@ from Bio.PDB import Polypeptide
 
 
 def generate_labels(name, structure=None):
-    label_dict = {c.id: {} for c in structure.get_chains()}
+    label_dict = {c.id: {} for c in structure.get_chains() if len(c) >0}
     method = config["labels"]["selected"]["method"]
     if method== "dssp":
         bi.log(3, "Selected method: DSSP")
@@ -52,45 +52,80 @@ def run_dssp(name, label_dict, data_folder, save_folder, raw_folder, abbreviatio
         bi.log(3, "Label already exists")
         return True
 
-    cmd = [config["general"]["dssp"], "--output-format", "mmcif", f"{data_folder}/{name}.cif",
+    cmd = [config["general"]["dssp"], "--output-format", "mmcif", "-v", f"{data_folder}/{name}.cif",
            f"{raw_folder}/{name}.dssp"]
     bi.log(3, " ".join(cmd))
     subprocess.run(cmd)
 
-
+    real_chains = list(label_dict.keys())
+    halucination_pointer = {}
+    #print("REAL", real_chains)
+    dssp_dict = {}
     with open(f"{raw_folder}/{name}.dssp", "r") as f:
-        start = False
+        start_sum = False
+        start_bridge = False
         for line in f:
             if "_dssp_struct_summary" in line:
-                start = True
+                start_sum = True
+                continue
+            if "_dssp_struct_bridge" in line:
+                start_bridge = True
                 continue
 
-            if not start:
-                continue
+
             if "#" in line:
-                break
-
-            #print(line)
-            line = line.split(" ")
-            line = [l for l in line if l != ""]
-            #print(line)
-            res = line[2]
-            ch = line[1]
-            resn = line[3].upper()
-            ss = line[4].replace(".", "#")
-
-            if ch not in label_dict.keys():
+                start_sum = False
+                if start_bridge:
+                    break
                 continue
-            try:
-                label_dict[ch][len(label_dict[ch])] = {"res": res, "resn": bi.utilities.d3to1[resn], "resn3":resn, abbreviation: ss}
-            except:
-                pass
-    if not start:
+            if start_sum:
+                #print(line)
+                line = line.split(" ")
+                line = [l for l in line if l != ""]
+                #print(line)
+                res = line[2]
+                dch = line[1]
+                if dch not in dssp_dict.keys():
+                    dssp_dict[dch] = {}
+                ch = real_chains[list(dssp_dict.keys()).index(dch)]
+
+                #print("DSSP:", dch, "REAL:", ch)
+                resn = line[3].upper()
+                ss = line[4].replace(".", "#")
+
+                if ch not in label_dict.keys():
+                    continue
+                try:
+                    dssp_dict[dch][len(dssp_dict[dch])] = {"res": res, "resn": bi.utilities.d3to1[resn], "resn3":resn, abbreviation: ss}
+                except:
+                    dssp_dict[dch][len(dssp_dict[dch])] = {"res": res, "resn": None, "resn3":resn, abbreviation: ss}
+            elif start_bridge:
+                # print(line)
+                line = line.split(" ")
+                line = [l for l in line if l != ""]
+                # print(line)
+                dch = line[3].upper()
+                rch = line[5].upper()
+
+                if dch not in halucination_pointer.keys():
+                    halucination_pointer[dch] = rch
+    #print(halucination_pointer)
+    [bi.log(4, "DSSP:", dch, "->>", "REAL:", rch) for dch, rch in halucination_pointer.items()]
+
+    for dch, rch in halucination_pointer.items():
+        label_dict[rch] = dssp_dict[dch]
+
+
+
+
+    #print("DSSP", dssp_dict.keys())
+    if not start_bridge:
         bi.log("error", "Error reading DSSP file")
         exit()
 
     with open(f"{save_folder}/{name}.labels.json", "w") as f:
         f.write(json.dumps(label_dict, indent=4))
+
 
     return True
 
