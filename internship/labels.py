@@ -15,7 +15,7 @@ from Bio.PDB import Polypeptide
 
 
 def generate_labels(name, structure=None):
-    label_dict = {c.id: {} for c in sorted(structure.get_chains())}
+    label_dict = {c.id: {} for c in structure.get_chains()}
     method = config["labels"]["selected"]["method"]
     if method== "dssp":
         bi.log(3, "Selected method: DSSP")
@@ -81,9 +81,10 @@ def run_dssp(name, label_dict, data_folder, save_folder, raw_folder, abbreviatio
 
             if ch not in label_dict.keys():
                 continue
-
-            label_dict[ch][len(label_dict[ch])] = {"res": res, "resn": bi.utilities.d3to1[resn], "resn3":resn, abbreviation: ss}
-
+            try:
+                label_dict[ch][len(label_dict[ch])] = {"res": res, "resn": bi.utilities.d3to1[resn], "resn3":resn, abbreviation: ss}
+            except:
+                pass
     if not start:
         bi.log("error", "Error reading DSSP file")
         exit()

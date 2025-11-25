@@ -74,7 +74,7 @@ def run_foldseek(filename, data_folder, raw_folder, label_folder):
             if ch in done_chains:
                 continue
             done_chains.append(ch)
-            print(ch)
+            #print(ch)
 
 
             rns, tks = line.split("\t")[1:3]
@@ -120,10 +120,11 @@ def run_saprot(name, mode, foldseek_path, label_path, save_folder):
                 bi.log("warning", f"chain {ch} has no foldseek data")
                 continue
             #print(foldsek_dict[ch])
-            #print(len(label_dict[ch]), len(foldsek_dict[ch]))
+
 
             if len(label_dict[ch]) != len(foldsek_dict[ch]):
-                bi.log("warning", "label and foldseek_dict do not match:", ch)
+
+                bi.log("warning", "label and foldseek_dict do not match:", ch, len(label_dict[ch]), len(foldsek_dict[ch]))
                 continue
             seqs[ch] = [f"{l["resn"].upper()}{f["fs"].lower()}" for l,f in zip(label_dict[ch].values(),foldsek_dict[ch].values())]
         elif mode == "seq":

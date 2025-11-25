@@ -25,7 +25,7 @@ predict = "-p" in sys.argv
 curate = not("--no-curate" in sys.argv)
 
 config["general"]["force"] = force
-
+bi.log("header", "FORCE:", force)
 
 
 np.random.seed(config["general"]["np_random"])
@@ -80,8 +80,9 @@ if embeddings:
         config["labels"]["selected"] = config["labels"][label_method]
         label_folder = config["labels"][label_method]["save_folder"]
         bi.log(2, "Label folder:", label_folder)
-        if not os.path.exists(os.path.join(label_folder, f"/{name}_{last_chain}.labels.json")) or force:
-            # label_dict = run_dssp(structure, name, "data/" + data_folder)
+        #print(os.path.exists(os.path.join(label_folder, f"{name}.labels.json")), force)
+        #print(os.path.join(label_folder, f"{name}_{last_chain}.labels.json"))
+        if not (os.path.exists(os.path.join(label_folder, f"{name}.labels.json"))) or force:
             bi.log(2, "Generating Labels...")
             from labels import generate_labels
             if not generate_labels(name, structure):
@@ -95,9 +96,9 @@ if embeddings:
         config["embeddings"]["selected"] = config["embeddings"][embedding_method]
         embedding_folder = config["embeddings"][embedding_method]["save_folder"]
         bi.log(2, "Embedding Folder:", embedding_folder)
-
-        if not os.path.exists(os.path.join(embedding_folder, f"/{name}_{last_chain}.pt")) or force:
-            # embedding_folder = generate_embeddings(dssp_dict, name)
+        #print(os.path.exists(os.path.join(embedding_folder, f"{name}_{last_chain}.pt")))
+        #print(os.path.join(embedding_folder, f"{name}_{last_chain}.pt"))
+        if not (os.path.exists(os.path.join(embedding_folder, f"{name}_{last_chain}.pt"))) or force:
             generate_embeddings(name, structure)
     bi.log("end", "Labels and Embeddings")
 
