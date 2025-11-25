@@ -27,17 +27,19 @@
         }
     },
     "embeddings": {
+      "default": "SaProt_full",
         "SaProt_full":{
             "model": "SaProt",
             "mode": "full",
             "dimensions": 480,
-            "save_folder": "out/SaProt/full"
+            "save_folder": "embeddings/SaProt_full",
+            "foldseek_folder": "raw/foldseek"
         },
         "SaProt_seq": {
             "model": "SaProt",
             "mode": "seq",
             "dimensions": 480,
-            "save_folder": "out/SaProt/seq"
+            "save_folder": "embeddings/SaProt_seq"
         }
     },
 

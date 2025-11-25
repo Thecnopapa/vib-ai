@@ -9,7 +9,7 @@ import setup
 setup.init()
 from setup import bioiain, bi, config
 
-from bioiain.utilities.DSSP import ss_to_index, index_to_ss
+from bioiain.biopython.DSSP import ss_to_index, index_to_ss
 from embeddings import run_foldseek, generate_embeddings
 
 
@@ -24,6 +24,7 @@ train = "-t" in sys.argv
 predict = "-p" in sys.argv
 curate = not("--no-curate" in sys.argv)
 
+config["general"]["force"] = force
 
 
 
@@ -53,7 +54,7 @@ if not predict:
     if skip_download:
         file_folder = f"data/{data_folder}"
     else:
-        file_folder = bi.imports.downloadPDB("./data", data_folder, file_path=pdb_list_file, file_format="cif", overwrite=False)
+        file_folder = bi.biopython.downloadPDB("./data", data_folder, file_path=pdb_list_file, file_format="cif", overwrite=False)
 
     bi.log("header", "File folder:", file_folder)
 
@@ -65,11 +66,11 @@ if embeddings:
     for file in structure_list:
         name = file.split(".")[0]
 
-        structure = bi.imports.loadPDB(os.path.join(file_folder, f"{name}.cif"))
-        bi.log(1, "Structure:",  structure)
+        structure = bi.biopython.loadPDB(os.path.join(file_folder, f"{name}.cif"))
+        bi.log("header", "Structure:",  structure)
 
         last_chain = [c.id for c in structure.get_chains()][-1]
-        bi.log(2, "Last Chain:", last_chain)
+        bi.log(1, "Last Chain:", last_chain)
 
         if "--labels" in sys.argv:
             label_method = sys.argv[sys.argv.index("--labels") + 1]
@@ -83,19 +84,21 @@ if embeddings:
             # label_dict = run_dssp(structure, name, "data/" + data_folder)
             bi.log(2, "Generating Labels...")
             from labels import generate_labels
-            generate_labels(name, structure)
-        continue # TODO: Config modular embeddings
+            if not generate_labels(name, structure):
+                continue
 
         if "--embedding" in sys.argv:
             embedding_method = sys.argv[sys.argv.index("--embedding") + 1]
         else:
             embedding_method = config["embeddings"]["default"]
-        emb_save_folder = config["embeddings"][embedding_method]["save_folder"]
-        emb_path = os.path.join(emb_save_folder, f"/{name}_{last_chain}.pt")
+        bi.log(1, "Embedding method:", embedding_method)
+        config["embeddings"]["selected"] = config["embeddings"][embedding_method]
+        embedding_folder = config["embeddings"][embedding_method]["save_folder"]
+        bi.log(2, "Embedding Folder:", embedding_folder)
 
-        if not os.path.exists(emb_path) or force:
+        if not os.path.exists(os.path.join(embedding_folder, f"/{name}_{last_chain}.pt")) or force:
             # embedding_folder = generate_embeddings(dssp_dict, name)
-            generate_embeddings(config["embeddings"][embedding_method], name)
+            generate_embeddings(name, structure)
     bi.log("end", "Labels and Embeddings")
 
 

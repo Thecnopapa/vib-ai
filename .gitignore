@@ -211,7 +211,7 @@ __marimo__/
 .idea
 internship/SaProt
 internship/data/*/
-internship/out
+internship/embeddings
 internship/exports
 internship/models
 internship/pred

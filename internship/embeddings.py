@@ -13,86 +13,151 @@ import torch
 
 
 
-def run_foldseek(structure, filename, dssp_dict, data_folder):
-    bi.log(2, "running foldseek...")
-    os.makedirs("out", exist_ok=True)
-    os.makedirs("out/foldseek", exist_ok=True)
+
+
+
+
+
+def generate_embeddings(name, structure=None):
+    model = config["embeddings"]["selected"]["model"]
+    if model== "SaProt":
+        bi.log(3, "Selected model: SaProt")
+        mode = config["embeddings"]["selected"]["mode"]
+        bi.log(3, "Selected mode:", mode)
+        try:
+            bi.log(3, "Foldseek command:", config["general"]["foldseek"])
+        except:
+            bi.log("error", "Foldseek command not found")
+            exit()
+        label_path = config["labels"]["selected"]["save_folder"]
+        foldseek_path = None
+        if mode == "full":
+            run_foldseek(name,
+                         "data/"+config["data"]["selected"]["folder_name"],
+                         config["embeddings"]["selected"]["foldseek_folder"],
+                         label_path)
+
+
+            foldseek_path = config["embeddings"]["selected"]["foldseek_folder"]
+
+        saprot_path = config["embeddings"]["selected"]["save_folder"]
+        run_saprot(name, mode, foldseek_path, label_path, saprot_path)
+
+
+    else:
+        bi.log("error", "Embedding generator model not recognised:", config["embeddings"]["selected"]["model"] )
+
+
+
+
+
+def run_foldseek(filename, data_folder, raw_folder, label_folder):
+    os.makedirs(raw_folder, exist_ok=True)
+
+    if os.path.exists(f"{raw_folder}/{filename}.foldseek.json") and not config["general"]["force"]:
+        bi.log(3, "Foldseek already calculated")
+        return True
+    label_dict = json.load(open(f"{label_folder}/{filename}.labels.json"))
     cmd = [config["general"]["foldseek"],
            "structureto3didescriptor", "-v", "0", "--threads", "4",
-           "--chain-name-mode", "1", f"{data_folder}/{filename}.cif",
-           f"out/foldseek/{filename}.csv"
+           "--chain-name-mode", "0", f"{data_folder}/{filename}.cif",
+           f"{raw_folder}/{filename}.foldseek.csv"
            ]
-    print(" ".join(cmd))
+    bi.log(4," ".join(cmd))
     subprocess.run(cmd)
     done_chains = []
-    with open(f"./out/foldseek/{filename}.csv", "r", encoding="utf-8") as f:
-        for line in f:
-            ch = line.split("\t")[0].split("_")[1].split(" ")[0]
+    foldseek_dict = {k:None for k in label_dict.keys()}
+    with open(f"{raw_folder}/{filename}.foldseek.csv", "r", encoding="utf-8") as f:
+
+        for line , ch in zip(f, foldseek_dict.keys()):
+
             if ch in done_chains:
                 continue
             done_chains.append(ch)
-            bi.log(3, "foldseek out:", ch)
-            l = line.split("\t")[2]
-            toks = [t for t in l]
-            print(len(dssp_dict[ch].items()), len(toks))
-            if not len(dssp_dict[ch].items()) == len(toks):
-                dssp_dict.pop(ch)
+            print(ch)
+
+
+            rns, tks = line.split("\t")[1:3]
+            resns = [r for r in rns]
+            toks = [t for t in tks]
+
+            bi.log(3, "foldseek out:", ch, len(resns), len(toks))
+
+
+            if not len(resns) == len(toks):
+                print(resns)
+                print(toks)
+                print(len(resns), len(toks))
+                foldseek_dict.pop(ch)
                 bi.log("warning", "foldseek tokens and dssp_dict do not match:", ch)
-                continue
-            for n, (k, v) in enumerate(dssp_dict[ch].items()):
+                exit()
+            foldseek_dict[ch] = {}
+            for n, (r, t) in enumerate(zip(resns, toks)):
                 if toks[n] == " ":
                     toks = "-"
-                dssp_dict[ch][k]["fs"] = toks[n]
-    return dssp_dict
+                foldseek_dict[ch][n] = {"fs": t, "resn": r}
+    json.dump(foldseek_dict, open(f"{raw_folder}/{filename}.foldseek.json", "w"), indent=4)
+    return True
 
 
-def generate_embeddings(dssp_dict, name, folder="out/SaProt", no3D=False):
-    bi.log(2, "Generating embeddings...")
-    seqs = {k: [] for k in dssp_dict.keys()}
-    seqs3D = {k: [] for k in dssp_dict.keys()}
-    #print(dssp_dict.items())
-    for k, v in dssp_dict.items():
-        #print(v)
-        #print(k)
 
-        if not no3D:
-            try:
-                seqs3D[k] = ["{}{}".format(i["resn"].upper(), i["fs"].lower()) for i in v.values()]
-            except:
+def run_saprot(name, mode, foldseek_path, label_path, save_folder):
+    bi.log(3, "Running SaProt, mode:", mode)
+    label_dict = json.load(open(f"{label_path}/{name}.labels.json"))
+    #print(label_dict.keys())
+
+    if mode == "full":
+        assert foldseek_path is not None
+        foldsek_dict = json.load(open(f"{foldseek_path}/{name}.foldseek.json"))
+        #print(foldsek_dict.keys())
+        assert label_dict.keys() == foldsek_dict.keys()
+
+    seqs = {}
+    for ch in label_dict.keys():
+        bi.log(4, "Merging foldseek_dict:", ch)
+        if mode == "full":
+            if foldsek_dict[ch] is None:
+                bi.log("warning", f"chain {ch} has no foldseek data")
                 continue
-        seqs[k] = ["{}{}".format(i["resn"].upper(), "#") for i in v.values()]
+            #print(foldsek_dict[ch])
+            #print(len(label_dict[ch]), len(foldsek_dict[ch]))
 
-        #print(seqs)
-        #print(seqs3D)
-        #print("######")
+            if len(label_dict[ch]) != len(foldsek_dict[ch]):
+                bi.log("warning", "label and foldseek_dict do not match:", ch)
+                continue
+            seqs[ch] = [f"{l["resn"].upper()}{f["fs"].lower()}" for l,f in zip(label_dict[ch].values(),foldsek_dict[ch].values())]
+        elif mode == "seq":
+            seqs[ch] = [f"{l["resn"]}#" for l in label_dict[ch]]
+        else:
+            bi.log("error", "Unknown SaProt mode:", mode)
+    #print(seqs.keys())
+
 
     for ch in seqs.keys():
         # Load model directly
+        bi.log(4, "Generating embeddings:", ch)
+        device = config["general"]["device"]
+        if mode == "full":
+            tokenizer = AutoTokenizer.from_pretrained("westlake-repl/SaProt_35M_AF2")
+            model = AutoModelForMaskedLM.from_pretrained("westlake-repl/SaProt_35M_AF2")
+        elif mode == "seq":
+            tokenizer = AutoTokenizer.from_pretrained("westlake-repl/SaProt_35M_AF2_seqOnly")
+            model = AutoModelForMaskedLM.from_pretrained("westlake-repl/SaProt_35M_AF2_seqOnly")
+        else:
+            bi.log("error", "Unknown SaProt mode:", mode)
 
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        device = "cpu"
 
-        tokenizer = AutoTokenizer.from_pretrained("westlake-repl/SaProt_35M_AF2")
-        model = AutoModelForMaskedLM.from_pretrained("westlake-repl/SaProt_35M_AF2")
-
-        tokenizerS = AutoTokenizer.from_pretrained("westlake-repl/SaProt_35M_AF2_seqOnly")
-        modelS = AutoModelForMaskedLM.from_pretrained("westlake-repl/SaProt_35M_AF2_seqOnly")
-
-        # print(tokenizer)
-        # print(model)
-
-        modelS.eval()
-        modelS.to(device)
+        model.eval()
+        model.to(device)
 
         seq = "".join(seqs[ch])
-        long_seq3D = "".join(seqs3D[ch])
 
-        inputs = tokenizerS(seq, return_tensors="pt").to(device)
+        inputs = tokenizer(seq, return_tensors="pt").to(device)
         inputs = {k: v.to(device) for k, v in inputs.items()}
         #print(inputs)
 
         with torch.no_grad():
-            outputs = modelS(**inputs, output_hidden_states=True)
+            outputs = model(**inputs, output_hidden_states=True)
         # print(outputs)
 
         # outputs.hidden_states is a tuple of all layers, including embeddings
@@ -104,28 +169,9 @@ def generate_embeddings(dssp_dict, name, folder="out/SaProt", no3D=False):
         #print(last_hidden.shape)  # ['<cls>', 'M#', 'E#', 'V#', 'Q#', '<eos>']
         #print(last_hidden)
 
-        os.makedirs(f"{folder}/seq_only", exist_ok=True)
-        torch.save(last_hidden, f"{folder}/seq_only/{name}_{ch}.pt")
+        os.makedirs(save_folder, exist_ok=True)
+        torch.save(last_hidden, f"{save_folder}/{name}_{ch}.pt")
 
-        if not no3D:
-            model.eval()
-            model.to(device)
+    return True
 
-            inputs = tokenizer(long_seq3D, return_tensors="pt").to(device)
-            inputs = {k: v.to(device) for k, v in inputs.items()}
 
-            with torch.no_grad():
-                outputs = model(**inputs, output_hidden_states=True)
-
-            # outputs.hidden_states is a tuple of all layers, including embeddings
-            # Shape of each layer: [batch_size, sequence_length, hidden_dim]
-            all_hidden_states = outputs.hidden_states
-
-            # Last layer hidden states
-            last_hidden = all_hidden_states[-1]  # [1, seq_len, hidden_dim]
-            #print(last_hidden.shape)
-            #print(last_hidden)
-            os.makedirs(f"{folder}/full", exist_ok=True)
-            torch.save(last_hidden, f"{folder}/full/{name}_{ch}.pt")
-            json.dump(dssp_dict[ch], open(f"{folder}/full/{name}_{ch}.json", "w"))
-    return os.path.abspath(folder)

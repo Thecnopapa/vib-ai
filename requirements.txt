@@ -18,4 +18,4 @@ scikit-learn
 
 
 --extra-index-url=https://test.pypi.org/simple/
-bioiain >= 0.0.4
+bioiain >= 0.0.5
