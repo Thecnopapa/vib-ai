@@ -33,17 +33,17 @@ class ResidueDataset(Dataset):
             lp = os.path.join(self.label_folder, f"{code}.labels.json")
             lj = json.load(open(lp))
 
-            for ch in lj.keys():
-                ch_i = 0
-                for i, _ in enumerate(lj[ch].keys()):
-                    self.pointer[self.total] = {"s": s, "i": ch_i} # {id_ch}, "res"
-                    self.total += 1
+            for i, _ in enumerate(lj[ch].keys()):
+                self.pointer[self.total] = {"s": s, "i": i} # {id_ch}, "res"
+                self.total += 1
 
     def __len__(self):
         return self.total
 
     def __getitem__(self, idx):
-        s, i, code, ch = self.pointer[idx]["s"], self.pointer[idx]["i"], self.pointer[idx]["s"], self.pointer[idx]["i"]
+        #print(self.pointer[idx])
+        s, i = self.pointer[idx]["s"], self.pointer[idx]["i"]
+
         if s == self.current_s:
             embeddings = self.current_e
             labs = self.current_l
@@ -52,7 +52,7 @@ class ResidueDataset(Dataset):
             e_path = os.path.join(self.folder, f"{s}.pt")
             l_path = os.path.join(self.label_folder, f"{code}.labels.json")
 
-            embeddings = torch.load(e_path)[0][1:-1]
+            embeddings = torch.load(e_path)[0]
             label_json = json.load(open(l_path))[ch]
             labs = torch.tensor(np.array([ss_to_index(r["ss"]) for r in label_json.values()]), dtype=torch.long)
 
@@ -60,12 +60,15 @@ class ResidueDataset(Dataset):
             self.current_e = embeddings
             self.current_l = labs
 
+
+
         #print(embeddings.shape)
         #print(labs.shape)
 
         emb = embeddings[i]
         lab = labs[i]
-        # print("emb:", emb.shape, "lab:", lab)
+
+        #print("emb:", emb.shape, "lab:", lab)
         return emb, lab
 
 

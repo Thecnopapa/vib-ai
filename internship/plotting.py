@@ -24,5 +24,5 @@ def plot_confusion(preds, labels, title, score, classes):
     sb.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=classes, yticklabels=classes)
     plt.xlabel("Predicted")
     plt.ylabel("True")
-    plt.title(title+f"S={score:.3f}")
+    plt.title(f"{title}_S={score:.3f}")
     plt.savefig(f"figs/{title}_confusion.png")

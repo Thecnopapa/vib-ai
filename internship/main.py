@@ -184,7 +184,9 @@ if train:
 
     #print(training_structures[0:3], "...", training_structures[-3:])
     num_structs = len(training_structures)
-    bi.log(2, "Training structures:", num_structs)
+    bi.log(2, f"Training with {num_structs}")
+    bi.log(3, "Number of PDB codes:", len(set([c[:5] for c in training_structures])))
+    bi.log(3, f"Number of available structures: {file_n}" )
     bi.log(1, "Input curated")
 
 
