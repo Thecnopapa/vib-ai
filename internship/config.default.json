@@ -67,5 +67,14 @@
     },
     "predict": {
 
+    },
+    "setups": {
+        "internship-large": {
+            "data": "mega-batch",
+            "labels": "dssp",
+            "embeddings": "SaProt_full",
+            "training": "MLP_SP_full"
+            }
+        }
     }
 }
