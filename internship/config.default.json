@@ -63,7 +63,16 @@
             "batch_size": 32,
             "shuffle": false,
             "test_ratio": 0.2
-        }
+        },
+        "MLP_SP_full_50": {
+                  "model": "MLP",
+                  "embeddings": "SaProt_full",
+                  "labels": "dssp",
+                  "epochs": 50,
+                  "batch_size": 64,
+                  "shuffle": false,
+                  "test_ratio": 0.2
+              }
     },
     "predict": {
 
@@ -74,7 +83,6 @@
             "labels": "dssp",
             "embeddings": "SaProt_full",
             "training": "MLP_SP_full"
-            }
         }
     }
 }

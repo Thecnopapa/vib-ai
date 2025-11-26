@@ -1,0 +1,31 @@
+
+    2025-11-26 22:17:58.247444
+    
+    ### ### Log file: log_0
+    
+    ### CMD
+    main.py
+    
+    ### ARGVS
+    
+    Force: False
+    
+    Download: True
+    Embeddings: False
+    Training: False
+        Curate: True
+    Predict: True
+    
+    ###
+    
+        
+    ### DATA
+        
+    N files: 85
+        
+    ### STRUCTURE LIST
+        
+    ['1GDC.cif', '1GLU.cif', '1LAT.cif', '1M2Z.cif', '1NHZ.cif', '1P93.cif', '1R4O.cif', '1R4R.cif', '1RGD.cif', '2GDA.cif', '3BQD.cif', '3CLD.cif', '3E7C.cif', '3FYL.cif', '3G6P.cif', '3G6Q.cif', '3G6R.cif', '3G6T.cif', '3G6U.cif', '3G8U.cif', '3G8X.cif', '3G97.cif', '3G99.cif', '3G9I.cif', '3G9J.cif', '3G9M.cif', '3G9O.cif', '3G9P.cif', '3H52.cif', '3K22.cif', '3K23.cif', '3MNE.cif', '3MNO.cif', '3MNP.cif', '4CSJ.cif', '4HN5.cif', '4HN6.cif', '4LSJ.cif', '4MDD.cif', '4P6W.cif', '4P6X.cif', '4UDC.cif', '4UDD.cif', '5CBX.cif', '5CBY.cif', '5CBZ.cif', '5CC1.cif', '5E69.cif', '5E6A.cif', '5E6B.cif', '5E6C.cif', '5E6D.cif', '5EMC.cif', '5EMP.cif', '5EMQ.cif', '5G3J.cif', '5G5W.cif', '5NFP.cif', '5NFT.cif', '5UC1.cif', '5UC3.cif', '5VA0.cif', '5VA7.cif', '6BQU.cif', '6BSE.cif', '6BSF.cif', '6CFN.cif', '6DXK.cif', '6EL6.cif', '6EL7.cif', '6EL9.cif', '6X6D.cif', '6X6E.cif', '6YMO.cif', '6YO8.cif', '6YOS.cif', '7KRJ.cif', '7KW7.cif', '7PRV.cif', '7PRW.cif', '7PRX.cif', '8A9G.cif', '8FFV.cif', '8FFW.cif', '8VKZ.cif']
+        
+    ###
+    

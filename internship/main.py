@@ -1,5 +1,5 @@
 
-import os, sys, subprocess
+import os, sys, subprocess, datetime
 
 import json
 import numpy as np
@@ -15,6 +15,8 @@ from embeddings import run_foldseek, generate_embeddings
 
 
 bi.log("start", "internship > main.py")
+os.makedirs("logs", exist_ok=True)
+log_file = "log_{}".format(len(os.listdir("logs")))
 
 
 skip_download = "--no-download" in sys.argv
@@ -27,6 +29,28 @@ curate = not("--no-curate" in sys.argv)
 config["general"]["force"] = force
 bi.log("header", "FORCE:", force)
 
+with open(f"logs/{log_file}", "w") as log:
+    log.write(f"""
+{datetime.datetime.now()}
+    
+### ### Log file: {log_file}
+    
+### CMD
+
+    {" ".join(sys.argv)}
+    
+### ARGVS
+    
+    Force: {force}
+    
+    Download: {not skip_download}
+    Embeddings: {embeddings}
+    Training: {train}
+        Curate: {curate}
+    Predict: {not predict}
+    
+###
+""")
 
 np.random.seed(config["general"]["np_random"])
 
@@ -60,6 +84,27 @@ if not predict:
 
     structure_list = sorted([f for f in os.listdir(file_folder) if ".swp" not in f])
     bi.log("end", "Data Load")
+
+    with open(f"logs/{log_file}", "a") as log:
+        log.write(f"""
+        
+### ### DATA
+        
+    N files: {len(structure_list)}
+    Folder: {os.path.abspath(file_folder)}
+
+### DATA CONFIG
+
+    Name: {dataset}
+{json.dumps(config["data"]["selected"], indent=2)}
+        
+### STRUCTURE LIST
+        
+{", ".join([os.path.basename(s) for s in structure_list])}
+        
+###
+""")
+
 
 if embeddings:
     bi.log("start", "Labels and Embeddings")
@@ -101,6 +146,31 @@ if embeddings:
         if not (os.path.exists(os.path.join(embedding_folder, f"{name}_{last_chain}.pt"))) or force:
             generate_embeddings(name, structure)
     bi.log("end", "Labels and Embeddings")
+    with open(f"logs/{log_file}", "a") as log:
+        log.write(f"""
+
+### ### LABELS
+    
+    N labels: {len(os.listdir(label_folder))}
+    Folder: {os.path.abspath(label_folder)}
+
+### LABEL CONFIG
+
+    Name: {label_method}
+{json.dumps(config["labels"]["selected"], indent=2)}
+
+### ### EMBEDDINGS
+    
+    N embeddings: {len(os.listdir(embedding_folder))}
+    Folder: {os.path.abspath(embedding_folder)}
+
+### EMBEDDING CONFIG
+
+    Name: {embedding_method}
+{json.dumps(config["embeddings"]["selected"], indent=2)}
+
+###
+""")
 
 
 
