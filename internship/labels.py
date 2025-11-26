@@ -120,8 +120,7 @@ def run_dssp(name, label_dict, data_folder, save_folder, raw_folder, abbreviatio
 
     #print("DSSP", dssp_dict.keys())
     if not start_bridge:
-        bi.log("error", "Error reading DSSP file")
-        exit()
+        bi.log("error", "Error reading DSSP file for:", name)
 
     with open(f"{save_folder}/{name}.labels.json", "w") as f:
         f.write(json.dumps(label_dict, indent=4))
