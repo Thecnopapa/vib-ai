@@ -31,7 +31,7 @@ bi.log("header", "FORCE:", force)
 np.random.seed(config["general"]["np_random"])
 
 
-
+data_folder = None
 if not predict:
     bi.log("start", "Data Load")
     if "--data" in sys.argv:
@@ -105,93 +105,111 @@ if embeddings:
 
 
 if train:
-
+    bi.log("start", "Model Training")
     import torch
     from training import train_mlp, split_sample
     from plotting import plot_confusion, plot_embeddings
-    from models import MLP
 
+    if "--model" in sys.argv:
+        try:
+            training_setting = sys.argv[sys.argv.index("--model") + 1]
+        except:
+            bi.log("error", "Training settings not provided")
+            exit()
+    else:
+        training_setting = config["training"]["default"]
+    bi.log("header", "Training setting:", training_setting)
+    config["training"]["selected"] = config["training"][training_setting]
+    try:
+        model_name=config["training"][training_setting]["model"]
+        embedding_name = config["training"][training_setting]["embeddings"]
+        label_name = config["training"][training_setting]["labels"]
+    except:
+        bi.log("error", f"Training settings not configured: {training_setting}")
+        exit()
+
+    bi.log(1, "Model name:", model_name)
+
+    if model_name == "MLP":
+        from models import MLP as model_class
+    else:
+        bi.log("error", "Model name not recognised:", model_name)
+    bi.log(2, model_class)
+
+    bi.log(1, "Embedding name:", embedding_name)
+    try:
+        config["training"]["selected_embedding"] = config["embeddings"][embedding_name]
+        embedding_folder =  config["training"]["selected_embedding"]["save_folder"]
+    except:
+        bi.log("error", f"Embedding settings not configured: {embedding_name}")
+        exit()
+
+    bi.log(2, "Embedding folder:", embedding_folder)
+    bi.log(1, "Label name:", label_name)
+    try:
+        config["training"]["selected_label"] = config["labels"][label_name]
+        label_folder =  config["training"]["selected_label"]["save_folder"]
+    except:
+        bi.log("error", f"Label settings not configured: {label_name}")
+        exit()
+
+    bi.log(2, "Label folder:", label_folder)
 
 
 
     training_structures = []
-    bi.log("start", "Curating embeddings...")
-    file_n = len(os.listdir("out/SaProt/full"))
-    for n, file in enumerate(sorted(os.listdir("out/SaProt/full"), reverse=True)):
+    bi.log(1, "Curating input...")
+    file_n = len(os.listdir(embedding_folder))
+    for n, file in enumerate(sorted(os.listdir(embedding_folder), reverse=True)):
         if not(file.split("_")[0]+".cif" in structure_list):
             continue
         fname = file.split(".")[0]
-        if file.endswith(".pt") and os.path.exists(f"out/SaProt/full/{fname}.json") and os.path.exists(f"out/SaProt/seq_only/{fname}.pt"):
+        name, ch = fname.split("_")
+
+        bi.log(2, file, fname, end="\r")
+        #print(file.endswith(".pt"), f"{label_folder}/{name}.labels.json")
+        if file.endswith(".pt") and os.path.exists(f"{label_folder}/{name}.labels.json"):
             if curate:
-                emb_struc = torch.load(f"out/SaProt/full/{fname}.pt")
-                reslist = json.load(open(f"out/SaProt/full/{fname}.json"))
-                emb_seq = torch.load(f"out/SaProt/seq_only/{fname}.pt")
+                embedding = torch.load(f"{embedding_folder}/{fname}.pt")[0][1:-1]
+                labels = json.load(open(f"{label_folder}/{name}.labels.json"))
 
-                new_struc = emb_struc[0][1:-1].tolist()
-                new_seq = emb_seq[0][1:-1].tolist()
-                new_lab = []
-                for ress in reslist.values():
-                    # print(ress)
-                    try:
-                        int(ress["res"])
-                        new_lab.append(ss_to_index(ress["ss"]))
-                    except:
-                        #bi.log("warning", "Disordered res:", ress["res"])
-                        new_lab.append(ss_to_index(ress["ss"]))
-                print(len(new_struc), "\t", len(new_seq), "\t", len(new_lab), "\t", fname, f"\t{n}/{file_n}", end="\r")
-
-                try:
-                    assert (len(new_struc) == len(new_seq) == len(new_lab))
-                    training_structures.append(fname)
-                except:
-                    f = f"out/SaProt/full/{fname}.pt"
-                    os.remove(f)
-                    bi.log("error", "Missmatch in file (removed):", f)
+                #print(embedding.shape[0])
+                #print(len(labels[ch]))
+                if embedding.shape[0] != len(labels[ch]):
+                    bi.log("warning", "Embeddings and labels do not match:", ch, embedding.shape[0], len(labels[ch]))
+                    # os.remove(os.pat.join(embedding_folder, file))
                     continue
+
             training_structures.append(fname)
 
-    print(training_structures[0:3], "...", training_structures[-3:])
+    #print(training_structures[0:3], "...", training_structures[-3:])
     num_structs = len(training_structures)
-    print("Training structures:", num_structs)
-    bi.log("end", "Curating embeddings")
+    bi.log(2, "Training structures:", num_structs)
+    bi.log(1, "Input curated")
 
 
-    config = {
-        "seq": {
-            "folder": "out/SaProt/seq_only",
-            "label_folder": "out/SaProt/full",
-            "active": False,
-            "epochs": 20,
-            "test_ratio": 0.2,
-        },
-        "struct": {
-            "folder": "out/SaProt/full",
-            "label_folder": None,
-            "active": True,
-            "epochs": 2,
-            "test_ratio": 0.2,
-        }
-    }
+    bi.log("header", "Training MLP...")
+    bi.log(1, "Model name:", model_name)
+    bi.log(2, model_class)
 
-    for k, v in config.items():
-        if v["active"]:
-            bi.log("start", f"Training MLP for: {k}")
+    train_loader, test_loader, train_dataset, test_dataset = split_sample(
+        training_structures, embedding_folder, label_folder, config["training"]["selected"]["test_ratio"])
 
-            train_loader, test_loader, train_dataset, test_dataset = split_sample(training_structures, v["folder"], v["label_folder"], test_ratio=v["test_ratio"])
+    os.makedirs("models", exist_ok=True)
+    title = f"{model_name}_{data_folder}_{label_name}_{embedding_name}"
+    classes = config["training"]["selected_label"]["classes"]
+    mlp = model_class(input_dim=config["training"]["selected_embedding"]["dimensions"], num_classes=len(classes))
+    mlp, preds, labels, score = train_mlp(mlp, train_loader, test_loader, epochs=config["training"]["selected"]["epochs"])
+    torch.save(mlp.state_dict(), f"models/{title}.pth")
 
-            os.makedirs("models", exist_ok=True)
+    bi.log("header", "Plotting results...")
+    os.makedirs("figs", exist_ok=True)
 
-            mlp = MLP(input_dim=embedding_dim)
-            mlp, preds, labels, score = train_mlp(mlp, train_loader, test_loader, epochs=v["epochs"])
-            torch.save(mlp.state_dict(), f"models/{data_folder}_{k}_N={len(training_structures)}_E={v["epochs"]}_S={score:.3f}.pth")
+    plot_embeddings(test_dataset, labels, title=title, score = score)
+    plot_confusion(preds, labels, title=title, score=score, classes=classes)
+    bi.log("header", "DONE")
 
-            bi.log("header", "Plotting...")
-            os.makedirs("figs", exist_ok=True)
-            plot_embeddings(test_dataset, labels,
-                            title=f"{data_folder}_{k}_{len(training_structures)}_E={v["epochs"]}_S={score:.3f}")
-            plot_confusion(preds, labels, title=f"{data_folder}_{k}_N={len(training_structures)}_E={v["epochs"]}_S={score:.3f}")
-            bi.log("header", "DONE")
-            bi.log("end", f"Training MLP for {k}")
+    bi.log("end", "Model Training")
 
 
 

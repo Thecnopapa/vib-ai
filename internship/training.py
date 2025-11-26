@@ -3,7 +3,7 @@ import os, sys, subprocess, json
 import numpy as np
 
 from setup import bioiain, bi, config
-from bioiain.utilities.DSSP import ss_to_index
+from bioiain.biopython.DSSP import ss_to_index
 
 import torch
 import torch.nn as nn
@@ -29,35 +29,39 @@ class ResidueDataset(Dataset):
         self.pointer = {}
         self.total = 0
         for s in self.structures:
-            lp = os.path.join(self.label_folder, f"{s}.json")
+            code, ch = s.split("_")
+            lp = os.path.join(self.label_folder, f"{code}.labels.json")
             lj = json.load(open(lp))
 
-            for i, _ in enumerate(lj.keys()):
-                self.pointer[self.total] = {"s": s, "i": i}
-                self.total += 1
+            for ch in lj.keys():
+                ch_i = 0
+                for i, _ in enumerate(lj[ch].keys()):
+                    self.pointer[self.total] = {"s": s, "i": ch_i} # {id_ch}, "res"
+                    self.total += 1
 
     def __len__(self):
         return self.total
 
     def __getitem__(self, idx):
-        s, i = self.pointer[idx]["s"], self.pointer[idx]["i"]
+        s, i, code, ch = self.pointer[idx]["s"], self.pointer[idx]["i"], self.pointer[idx]["s"], self.pointer[idx]["i"]
         if s == self.current_s:
             embeddings = self.current_e
             labs = self.current_l
         else:
-            embedding_path = os.path.join(self.folder, f"{s}.pt")
-            label_path = os.path.join(self.label_folder, f"{s}.json")
+            code, ch = s.split("_")
+            e_path = os.path.join(self.folder, f"{s}.pt")
+            l_path = os.path.join(self.label_folder, f"{code}.labels.json")
 
-            embeddings = torch.load(embedding_path)[0][1:-1]
-            label_json = json.load(open(label_path))
+            embeddings = torch.load(e_path)[0][1:-1]
+            label_json = json.load(open(l_path))[ch]
             labs = torch.tensor(np.array([ss_to_index(r["ss"]) for r in label_json.values()]), dtype=torch.long)
 
             self.current_s = s
             self.current_e = embeddings
             self.current_l = labs
 
-        # print(embeddings.shape)
-        # print(labs.shape)
+        #print(embeddings.shape)
+        #print(labs.shape)
 
         emb = embeddings[i]
         lab = labs[i]

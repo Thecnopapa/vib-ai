@@ -23,7 +23,8 @@
             "method": "dssp",
             "save_folder": "labels/dssp",
             "raw_folder": "raw/dssp",
-            "abbreviation": "ss"
+            "abbreviation": "ss",
+            "classes": ["H", "B" ,"G" ,"I" ,"P" ,"E" ,"T", "S" ,"#"]
         }
     },
     "embeddings": {
@@ -44,16 +45,20 @@
     },
 
     "training": {
-        "default": "SaProt_full",
-        "SaProt_full": {
+        "default": "MLP_SP_full",
+        "MLP_SP_full": {
+            "model": "MLP",
             "embeddings": "SaProt_full",
+            "labels": "dssp",
             "epochs": 20,
             "batch_size": 32,
             "shuffle": false,
             "test_ratio": 0.2
         },
-        "SaProt_seq": {
+        "MLP_SP_seq": {
+            "model": "MLP",
             "embeddings": "SaProt_seq",
+            "labels": "dssp",
             "epochs": 20,
             "batch_size": 32,
             "shuffle": false,

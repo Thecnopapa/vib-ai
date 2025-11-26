@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import seaborn as sb
 import bioiain as bi
 
-def plot_embeddings(dataset, labels, title="Embedding PCA"):
+def plot_embeddings(dataset, labels, title, score):
     bi.log(1, "Plotting embeddings...")
     pca = PCA(n_components=2)
     emb_2d = pca.fit_transform([dataset[d][0] for d in  range(len(dataset))])
@@ -17,12 +17,12 @@ def plot_embeddings(dataset, labels, title="Embedding PCA"):
 
 
 # Confusion matrices
-def plot_confusion(preds, labels, title="Confusion Matrix"):
+def plot_confusion(preds, labels, title, score, classes):
     bi.log(1, "Plotting confusion...")
     cm = confusion_matrix(labels, preds)
     plt.figure(figsize=(8 ,8))
-    sb.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=['H' ,'B' ,'E' ,'G' ,"I" ,"T" ,"S" ,"-"], yticklabels=['H' ,'B' ,'E' ,'G' ,"I" ,"T" ,"S" ,"-"])
+    sb.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=classes, yticklabels=classes)
     plt.xlabel("Predicted")
     plt.ylabel("True")
-    plt.title(title)
+    plt.title(title+f"S={score:.3f}")
     plt.savefig(f"figs/{title}_confusion.png")
