@@ -198,7 +198,7 @@ if train:
         training_structures, embedding_folder, label_folder, config["training"]["selected"]["test_ratio"])
 
     os.makedirs("models", exist_ok=True)
-    title = f"{model_name}_{data_folder}_{label_name}_{embedding_name}"
+    title = f"{training_setting}_{data_folder}_{label_name}_{embedding_name}"
     classes = config["training"]["selected_label"]["classes"]
     mlp = model_class(input_dim=config["training"]["selected_embedding"]["dimensions"], num_classes=len(classes))
     mlp, preds, labels, score = train_mlp(mlp, train_loader, test_loader, epochs=config["training"]["selected"]["epochs"])
