@@ -2,6 +2,8 @@ import json, os, sys, datetime
 now = datetime.datetime.now()
 os.makedirs("logs", exist_ok=True)
 log_file = "log_{}".format(now)
+log_file = log_file.replace(":", "_")
+log_file = log_file.replace(".", "_")
 
 def import_bi():
     global bi
