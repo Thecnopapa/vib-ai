@@ -2,7 +2,7 @@
 
 import os, sys, subprocess, json
 
-
+from bioiain.biopython import ss_to_index
 
 from setup import config, bi, bioiain
 
@@ -61,27 +61,26 @@ def calculate_sasa(name, label_dict, structure, data_folder, save_folder, abbrev
     for chain in structure[0].get_chains():
         ch = chain.id
         for res in chain.get_residues():
-            print(ch, res.id, res.sasa)
+            #print(ch, res.id, res.sasa)
+            #print(res.id[0])
             if res.id[0] == " ":
                 try:
                     label_dict[ch][len(label_dict[ch])] = {
                         "res": len(label_dict[ch]),
                         "resn3": res.resname,
                         "resn": d3to1[res.resname],
-                        abbreviation+"_raw": res.sasa,
-                        abbreviation: int(res.sasa > threshold)
+                        abbreviation: res.sasa,
+                        "label": int(res.sasa > threshold),
                     }
-                    res.bfactor = res.sasa,
+                    ca = [a for a in res if a.id == "CA"][0]
+                    #print("sasa:", res.sasa)
+                    ca.bfactor = float(res.sasa > threshold)
                 except:
-                    res.bfactor = 0
                     bi.log("warning", "Residue not recognised:", res.resname)
     with open(f"{save_folder}/{name}.labels.json", "w") as f:
         f.write(json.dumps(label_dict, indent=4))
 
 
-    quick_display(structure)
-
-    exit()
 
 
 def run_dssp(name, label_dict, data_folder, save_folder, raw_folder, abbreviation, structure=None):
@@ -136,9 +135,9 @@ def run_dssp(name, label_dict, data_folder, save_folder, raw_folder, abbreviatio
                 if ch not in label_dict.keys():
                     continue
                 try:
-                    dssp_dict[dch][len(dssp_dict[dch])] = {"res": res, "resn": bi.utilities.d3to1[resn], "resn3":resn, abbreviation: ss}
+                    dssp_dict[dch][len(dssp_dict[dch])] = {"res": res, "resn": bi.utilities.d3to1[resn], "resn3":resn, abbreviation: ss, "label": ss_to_index(ss)}
                 except:
-                    dssp_dict[dch][len(dssp_dict[dch])] = {"res": res, "resn": None, "resn3":resn, abbreviation: ss}
+                    dssp_dict[dch][len(dssp_dict[dch])] = {"res": res, "resn": None, "resn3":resn, abbreviation: ss, "label": ss_to_index(ss)}
             elif start_bridge:
                 # print(line)
                 line = line.split(" ")

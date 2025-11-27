@@ -32,7 +32,7 @@
             "abbreviation": "sasa",
             "scope": "R",
             "probe_radius": 1.40,
-            "threshold": 10,
+            "threshold": 20.0,
             "classes": ["I", "O" ,"C" ,"#"]
         }
     },
@@ -54,34 +54,29 @@
     },
 
     "training": {
-        "default": "MLP_SP_full",
-        "MLP_SP_full": {
+        "default": "MLP_20",
+        "MLP_10": {
             "model": "MLP",
             "embeddings": "SaProt_full",
-            "labels": "dssp",
-            "epochs": 20,
+            "epochs":100,
             "batch_size": 32,
             "shuffle": false,
             "test_ratio": 0.2
         },
-        "MLP_SP_seq": {
+        "MLP_20": {
             "model": "MLP",
-            "embeddings": "SaProt_seq",
-            "labels": "dssp",
             "epochs": 20,
-            "batch_size": 32,
+            "batch_size": 64,
             "shuffle": false,
             "test_ratio": 0.2
         },
-        "MLP_SP_full_50": {
-                  "model": "MLP",
-                  "embeddings": "SaProt_full",
-                  "labels": "dssp",
-                  "epochs": 50,
-                  "batch_size": 64,
-                  "shuffle": false,
-                  "test_ratio": 0.2
-              }
+        "MLP_50": {
+            "model": "MLP",
+            "epochs": 50,
+            "batch_size": 128,
+            "shuffle": false,
+            "test_ratio": 0.2
+        }
     },
     "predict": {
 
@@ -92,13 +87,19 @@
             "data": "mega-batch",
             "labels": "dssp",
             "embeddings": "SaProt_full",
-            "training": "MLP_SP_full"
+            "training": "MLP_10"
         },
         "internship-receptors": {
             "data": "receptors",
             "labels": "dssp",
             "embeddings": "SaProt_full",
-            "training": "MLP_SP_full"
+            "training": "MLP_20"
+        },
+        "receptor_sasa": {
+            "data": "receptors",
+            "labels": "sasa_res",
+            "embeddings": "SaProt_full",
+            "training": "MLP_20"
         }
     }
 }

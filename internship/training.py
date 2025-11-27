@@ -54,8 +54,8 @@ class ResidueDataset(Dataset):
 
             embeddings = torch.load(e_path)[0]
             label_json = json.load(open(l_path))[ch]
-            labs = torch.tensor(np.array([ss_to_index(r["ss"]) for r in label_json.values()]), dtype=torch.long)
-
+            labs = torch.tensor(np.array([r["label"] for r in label_json.values()]), dtype=torch.long)
+            #print(labs)
             self.current_s = s
             self.current_e = embeddings
             self.current_l = labs

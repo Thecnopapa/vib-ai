@@ -8,8 +8,8 @@ import setup
 setup.init()
 from setup import bioiain, bi, config, log_file
 
-from bioiain.biopython.DSSP import ss_to_index, index_to_ss
-from embeddings import run_foldseek, generate_embeddings
+from bioiain.biopython.DSSP import index_to_ss
+from embeddings import generate_embeddings
 
 
 
@@ -149,6 +149,7 @@ if run_embeddings:
         #print(os.path.exists(os.path.join(embedding_folder, f"{name}_{last_chain}.pt")))
         #print(os.path.join(embedding_folder, f"{name}_{last_chain}.pt"))
         if not (os.path.exists(os.path.join(embedding_folder, f"{name}_{last_chain}.pt"))) or force:
+            from embeddings import generate_embeddings
             generate_embeddings(name, structure)
     bi.log("end", "EMBEDDINGS")
     with open(f"logs/{log_file}", "a") as log:
@@ -161,7 +162,6 @@ if run_embeddings:
 
 ### EMBEDDING CONFIG
 
-    Name: {embedding_method}
 {json.dumps(config["embeddings"]["selected"], indent=2)}
 
 ###
@@ -172,41 +172,36 @@ if run_embeddings:
 if train:
     bi.log("start", "Model Training")
     import torch
+    from models import get_model_class
     from training import train_mlp, split_sample
     from plotting import plot_confusion, plot_embeddings
 
 
     try:
         model_name=config["training"]["selected"]["model"]
-        embedding_name = config["training"]["selected"]["embeddings"]
-        label_name = config["training"]["selected"]["labels"]
     except:
-        bi.log("error", f"Training settings not configured: {training_setting}")
+        bi.log("error", "Training settings not configured")
         exit()
 
     bi.log(1, "Model name:", model_name)
 
-    if model_name == "MLP":
-        from models import MLP as model_class
-    else:
-        bi.log("error", "Model name not recognised:", model_name)
+
+    model_class = get_model_class(model_name)
     bi.log(2, model_class)
 
-    bi.log(1, "Embedding name:", embedding_name)
     try:
-        config["training"]["selected_embedding"] = config["embeddings"][embedding_name]
+        config["training"]["selected_embedding"] = config["embeddings"]["selected"]
         embedding_folder =  config["training"]["selected_embedding"]["save_folder"]
     except:
-        bi.log("error", f"Embedding settings not configured: {embedding_name}")
+        bi.log("error", "Embedding settings not configured")
         exit()
 
     bi.log(2, "Embedding folder:", embedding_folder)
-    bi.log(1, "Label name:", label_name)
     try:
-        config["training"]["selected_label"] = config["labels"][label_name]
+        config["training"]["selected_label"] = config["labels"]["selected"]
         label_folder =  config["training"]["selected_label"]["save_folder"]
     except:
-        bi.log("error", f"Label settings not configured: {label_name}")
+        bi.log("error",f"Label settings not configured")
         exit()
 
     bi.log(2, "Label folder:", label_folder)
@@ -254,9 +249,12 @@ if train:
         training_structures, embedding_folder, label_folder, config["training"]["selected"]["test_ratio"])
 
     os.makedirs("models", exist_ok=True)
-    title = f"{training_setting}_{data_folder}_{label_name}_{embedding_name}"
-    classes = config["training"]["selected_label"]["classes"]
+
+    title = f"{model_name}_{data_folder}_{config["labels"]["selected"]["method"]}_{config['embeddings']['selected']['model']}"
+    classes = config["labels"]["selected"]["classes"]
+    print(classes)
     mlp = model_class(input_dim=config["training"]["selected_embedding"]["dimensions"], num_classes=len(classes))
+
     mlp, preds, labels, score = train_mlp(mlp, train_loader, test_loader, epochs=config["training"]["selected"]["epochs"])
     torch.save(mlp.state_dict(), f"models/{title}.pth")
 
@@ -273,10 +271,17 @@ if train:
 
 
 if predict:
-    from models import MLP
+    bi.log("start", "Predicting...")
+
+    from models import get_model_class
+
+
+
+    model_class = get_model_class(config["predict"]["selected"]["model"])
+    bi.log("header", model_class)
 
     import Bio
-    bi.log("start", "Predicting...")
+
 
     try:
         seq_index = sys.argv.index("-s") + 1

@@ -1,6 +1,6 @@
 
 import torch.nn as nn
-
+from setup import bi, bioiain, config
 
 # ---------------------------
 # MLP model
@@ -19,3 +19,15 @@ class MLP(nn.Module):
         )
     def forward(self, x):
         return self.model(x)
+
+
+
+def get_model_class(name):
+    if name == "MLP":
+        if name == "MLP":
+            from models import MLP
+            return MLP
+        else:
+            bi.log("error", "Model name not recognised:", name)
+            exit()
+            return None
