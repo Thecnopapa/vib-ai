@@ -3,6 +3,7 @@ import os, sys, subprocess
 import json
 import numpy as np
 from matplotlib.style.core import available
+from torch.xpu import device
 
 import setup
 setup.init()
@@ -301,7 +302,7 @@ if predict:
 
             try:
 
-                sequence = bi.utilities.clean_string(i, allow=["#", "-"])
+                sequence = bi.utilities.clean_string(i, allow=["#", "-"]).upper()
                 assert len(sequence) > 0
                 sequence_ok = True
             except:
@@ -337,152 +338,173 @@ if predict:
 
 
 
+    def predict(details):
+
+        # INPUT READY
+        bi.log("header", "Input received!")
+        print(json.dumps(details, indent=4))
 
 
-    # INPUT READY
-    bi.log("header", "Input received!")
-    print(json.dumps(details, indent=4))
-
-
-    from models import get_model_class
-    model_class = get_model_class(details["model_name"].split("_")[0].split("-")[0])
-    bi.log(1, "Model requested:")
-    if model_class is None:
-        bi.log(2, model_class)
-        bi.log("error", "model name not recognised:", details["model_name"].split("_")[0].split("-")[0])
-        model_class = get_model_class(input("Enter manually (1 chance only)\n>>> ").strip())
+        from models import get_model_class
+        model_class = get_model_class(details["model_name"].split("_")[0].split("-")[0])
+        bi.log(1, "Model requested:")
         if model_class is None:
-            bi.log("error", "Not recognised either sorry")
-            exit()
-        else:
-            bi.log(2, "Good job!")
-    bi.log(2, model_class)
+            bi.log(2, model_class)
+            bi.log("error", "model name not recognised:", details["model_name"].split("_")[0].split("-")[0])
+            model_class = get_model_class(input("Enter manually (1 chance only)\n>>> ").strip())
+            if model_class is None:
+                bi.log("error", "Not recognised either sorry")
+                exit()
+            else:
+                bi.log(2, "Good job!")
+        bi.log(2, model_class)
 
-    try:
-        label_method = details["model_name"].split("_")[2]
-    except:
-        label_method = None
-    bi.log(1, "Labels requested:", label_method)
-    if label_method not in config["labels"].keys():
-        bi.log("error", "Label method not recognised:", details["model_name"].split("_")[0])
-        [bi.log(2, l) for l in config["labels"].keys()]
-        label_method = input("Enter manually (1 chance only)\n>>> ").strip()
+        try:
+            label_method = details["model_name"].split("_")[2]
+        except:
+            label_method = None
+        bi.log(1, "Labels requested:", label_method)
         if label_method not in config["labels"].keys():
-            bi.log("error", "Not recognised either sorry")
-            exit()
-        else:
-            bi.log(2, "Good job!")
-    bi.log(2, label_method)
+            bi.log("error", "Label method not recognised:", details["model_name"].split("_")[0])
+            [bi.log(2, l) for l in config["labels"].keys()]
+            label_method = input("Enter manually (1 chance only)\n>>> ").strip()
+            if label_method not in config["labels"].keys():
+                bi.log("error", "Not recognised either sorry")
+                exit()
+            else:
+                bi.log(2, "Good job!")
+        bi.log(2, label_method)
+
+        try:
+            embedding_method = details["model_name"].split("_")[3]
+        except:
+            embedding_method = None
+        bi.log(1, "Embedding requested:", embedding_method)
+        available_embeddings = list(set([e["model"] for e in config["embeddings"].values() if type(e) is dict]))
+        if embedding_method not in available_embeddings:
+            bi.log("error", "Embedding method not recognised:", details["model_name"].split("_")[0])
+            [bi.log(2, l) for l in available_embeddings]
+            embedding_method = input("Enter manually (1 chance only)\n>>> ").strip()
+            if embedding_method not in available_embeddings:
+                bi.log("error", "Not recognised either sorry")
+                exit()
+            else:
+                bi.log(2, "Good job!")
+        bi.log(2, embedding_method)
 
 
 
-    os.makedirs("pred", exist_ok=True)
-    n = 0
-    fname = f"prediction_{bi.utilities.strings.add_front_0(n, 3)}"
-    while os.path.exists(f"pred/{fname}"):
-        n += 1
+        os.makedirs("pred", exist_ok=True)
+        n = 0
         fname = f"prediction_{bi.utilities.strings.add_front_0(n, 3)}"
+        while os.path.exists(f"pred/{fname}"):
+            n += 1
+            fname = f"prediction_{bi.utilities.strings.add_front_0(n, 3)}"
 
-    bi.log("header", f"Starting prediction: {fname}")
-
-    os.makedirs(f"pred/{fname}")
-    bi.log(1, "Prediction folder:", os.path.abspath(f"pred/{fname}"))
-
-    structure = None
-    if details["pdb_code"] is not None:
-        download_folder = bi.imports.downloadPDB("pred", fname, [details["pdb_code"]], file_format="cif")
-        file_path = os.path.join(download_folder, f"{details["pdb_code"]}.cif")
-        structure = bi.imports.loadPDB(file_path)
-    elif details["pdb_path"] is not None:
-        if os.path.exists(details["pdb_path"]):
-            structure = bi.imports.loadPDB(details["pdb_path"])
-        else:
-            bi.log("error", "Provided path does not exist: {}".format(details["pdb_path"]))
-            exit()
-    print(structure)
-
-    bi.log("header", "Sequence:")
-    labels = {"A":{str(n):{
-        "resn":name,
-        "ss": "#",
-        "res":n,
-    } for n, name in enumerate(sequence)}}
-    print("".join([r["resn"] for r in labels["A"].values()]))
-    print("length:", len(labels["A"]))
+        bi.log("header", f"Starting prediction: {fname}")
 
 
-    json.dump({
-        "sequence": "".join([r["resn"] for r in dssp["A"].values()]),
-        "dssp": dssp}, open(f"pred/{fname}/{fname}.json", "w"))
+        pred_folder = os.path.abspath(f"pred/{fname}")
+        os.makedirs(pred_folder)
+        bi.log(1, "Prediction folder:", pred_folder)
 
-    #print(dssp)
-    generate_embeddings(dssp, fname, folder=f"pred/{fname}/SaProt", no3D=True)
+        structure = None
+        if details["pdb_code"] is not None:
+            download_folder = bi.biopython.downloadPDB("pred", fname, [details["pdb_code"]], file_format="cif")
+            file_path = os.path.join(download_folder, f"{details["pdb_code"]}.cif")
+            structure = bi.biopython.loadPDB(file_path)
+        elif details["pdb_path"] is not None:
+            if os.path.exists(details["pdb_path"]):
+                file_path = details["pdb_path"]
+                structure = bi.biopython.loadPDB(details["pdb_path"])
+            else:
+                bi.log("error", "Provided path does not exist: {}".format(details["pdb_path"]))
+                exit()
+        print(structure)
 
+        bi.log("header", "Sequence:")
+        if embedding_method == "SaProt":
+            labels = {"A":{str(n):{
+                "resn":name,
+                "fs": "#",
+                "label": None,
+                "res":n,
+            } for n, name in enumerate(sequence)}}
+        print("".join([r["resn"] for r in labels["A"].values()]))
+        print("length:", len(labels["A"]))
 
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    device = "cpu"
+        with open(f"pred/{fname}/{fname}.fasta", "w") as f:
+            f.write(f">{fname}")
+            f.write("".join([r["resn"] for r in labels["A"].values()]))
 
-    model_path = "models/mega-batch_struct.pth"
-    model = MLP(input_dim=embedding_dim)
-    model.load_state_dict(torch.load(model_path, weights_only=False))
+        json.dump(labels, open(f"pred/{fname}/{fname}.labels.json", "w"))
 
-    model.eval()
-    preds = []
-    labels_eval = []
+        #print(dssp)
+        generate_embeddings(fname, structure, pred_folder, pred_folder, model=embedding_method, mode="seq", predict=True)
 
+        device = config["general"]["device"]
 
-    embeddings = torch.load(f"pred/{fname}/SaProt/seq_only/{fname}_A.pt")[0][2:-2]
-    bi.log(1, "n embeddings:", len(embeddings), embeddings.shape)
-    with torch.no_grad():
-        for X_batch in embeddings:
-            X_batch = X_batch.to(device)
-            logits = list(model(X_batch).numpy())
-            #print(logits)
-            pred = logits.index(max(logits))
-            preds.append(pred)
-    bi.log("header", "Predictions:")
-    print("".join([str(p) for p in preds]))
-    print("len:", len(preds))
+        model_path = "models/mega-batch_struct.pth"
+        model = MLP(input_dim=embedding_dim)
+        model.load_state_dict(torch.load(model_path, weights_only=False))
 
-    if structure is not None:
-        for chain in structure.get_chains():
-            print(chain)
-            for res, p in zip(chain.get_residues(), preds):
-                print([a for a in res])
-                try:
-                    ca = [a for a in res if a.id == "CA"][0]
-                    ca.bfactor = int(p)
-                except:
-                    pass
-
-    dssp = run_dssp(structure, structure.data["info"]["name"], data_folder=f"pred/{fname}", out_folder=f"pred/{fname}")
-    matching_chain = "A"
-    for ch in dssp.keys():
-        print(ch, len(dssp[ch]), len(preds))
-        if len(dssp[ch]) == len(preds):
-            matching_chain = ch
-    aligner = Bio.Align.PairwiseAligner()
-    print(aligner)
-    al = aligner.align("".join([d["ss"].replace("-", "#") for d in dssp[matching_chain].values()]), "".join([index_to_ss(p) for p in preds]),)
-    print(al[0])
-    with open(f"pred/{fname}/output.txt", "w") as f:
-        f.write("SEQUENCE>\t{}\n".format("".join([r["resn"] for r in dssp["A"].values()])))
-        f.write("PREDICT >\t{}\n".format("".join([index_to_ss(p) for p in preds])))
-        if matching_chain is not None:
-            f.write("DSSP    >\t{}\n".format("".join([d["ss"] for d in dssp[matching_chain].values()])))
-        f.write(f"\n\n\nAlignment (score: {al[0].score})/{len(al[0].query)}\n")
-        f.write(str(al[0]))
+        model.eval()
+        preds = []
+        labels_eval = []
 
 
+        embeddings = torch.load(f"pred/{fname}/SaProt/seq_only/{fname}_A.pt")[0][2:-2]
+        bi.log(1, "n embeddings:", len(embeddings), embeddings.shape)
+        with torch.no_grad():
+            for X_batch in embeddings:
+                X_batch = X_batch.to(device)
+                logits = list(model(X_batch).numpy())
+                #print(logits)
+                pred = logits.index(max(logits))
+                preds.append(pred)
+        bi.log("header", "Predictions:")
+        print("".join([str(p) for p in preds]))
+        print("len:", len(preds))
+
+        if structure is not None:
+            for chain in structure.get_chains():
+                print(chain)
+                for res, p in zip(chain.get_residues(), preds):
+                    print([a for a in res])
+                    try:
+                        ca = [a for a in res if a.id == "CA"][0]
+                        ca.bfactor = int(p)
+                    except:
+                        pass
+
+        dssp = run_dssp(structure, structure.data["info"]["name"], data_folder=f"pred/{fname}", out_folder=f"pred/{fname}")
+        matching_chain = "A"
+        for ch in dssp.keys():
+            print(ch, len(dssp[ch]), len(preds))
+            if len(dssp[ch]) == len(preds):
+                matching_chain = ch
+        aligner = Bio.Align.PairwiseAligner()
+        print(aligner)
+        al = aligner.align("".join([d["ss"].replace("-", "#") for d in dssp[matching_chain].values()]), "".join([index_to_ss(p) for p in preds]),)
+        print(al[0])
+        with open(f"pred/{fname}/output.txt", "w") as f:
+            f.write("SEQUENCE>\t{}\n".format("".join([r["resn"] for r in dssp["A"].values()])))
+            f.write("PREDICT >\t{}\n".format("".join([index_to_ss(p) for p in preds])))
+            if matching_chain is not None:
+                f.write("DSSP    >\t{}\n".format("".join([d["ss"] for d in dssp[matching_chain].values()])))
+            f.write(f"\n\n\nAlignment (score: {al[0].score})/{len(al[0].query)}\n")
+            f.write(str(al[0]))
 
 
-    session = bi.visualisation.pymol.PymolScript(fname, f"pred/{fname}/session")
-    session.load_entity(structure)
-    session.spectrum("(all)", "b", "rainbow", minimum=0, maximum=7)
-    session.write_script()
 
 
+        session = bi.visualisation.pymol.PymolScript(fname, f"pred/{fname}/session")
+        session.load_entity(structure)
+        session.spectrum("(all)", "b", "rainbow", minimum=0, maximum=7)
+        session.write_script()
 
+
+    predict(details)
     bi.log("end", "PREDICT")
 
 

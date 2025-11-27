@@ -18,20 +18,28 @@ import torch
 
 
 
-def generate_embeddings(name, structure=None):
-    model = config["embeddings"]["selected"]["model"]
+def generate_embeddings(name, structure=None, label_path=None, save_folder=None, model=None, mode=None, predict=False):
+    if model is None:
+        model = config["embeddings"]["selected"]["model"]
     if model== "SaProt":
         bi.log(3, "Selected model: SaProt")
-        mode = config["embeddings"]["selected"]["mode"]
+        if predict:
+            assert mode is not None
+            assert label_path is not None
+            assert save_folder is not None
+        else:
+            mode = config["embeddings"]["selected"]["mode"]
+            label_path = config["labels"]["selected"]["save_folder"]
+            save_folder = config["embeddings"]["selected"]["save_folder"]
         bi.log(3, "Selected mode:", mode)
-        try:
-            bi.log(3, "Foldseek command:", config["general"]["foldseek"])
-        except:
-            bi.log("error", "Foldseek command not found")
-            exit()
-        label_path = config["labels"]["selected"]["save_folder"]
+
         foldseek_path = None
         if mode == "full":
+            try:
+                bi.log(3, "Foldseek command:", config["general"]["foldseek"])
+            except:
+                bi.log("error", "Foldseek command not found")
+                exit()
             run_foldseek(name,
                          "data/"+config["data"]["selected"]["folder_name"],
                          config["embeddings"]["selected"]["foldseek_folder"],
@@ -40,8 +48,8 @@ def generate_embeddings(name, structure=None):
 
             foldseek_path = config["embeddings"]["selected"]["foldseek_folder"]
 
-        saprot_path = config["embeddings"]["selected"]["save_folder"]
-        run_saprot(name, mode, foldseek_path, label_path, saprot_path)
+
+        run_saprot(name, mode, foldseek_path, label_path, save_folder)
 
 
     else:
@@ -105,16 +113,18 @@ def run_saprot(name, mode, foldseek_path, label_path, save_folder):
     bi.log(3, "Running SaProt, mode:", mode)
     label_dict = json.load(open(f"{label_path}/{name}.labels.json"))
     #print(label_dict.keys())
-
+    fs_keys = label_dict.keys()
     if mode == "full":
         assert foldseek_path is not None
         foldsek_dict = json.load(open(f"{foldseek_path}/{name}.foldseek.json"))
         #print(foldsek_dict.keys())
         assert label_dict.keys() == foldsek_dict.keys()
+        fs_keys = foldsek_dict.keys()
 
     seqs = {}
     #print(label_dict.keys(), foldsek_dict.keys())
-    for ch, fch in zip(label_dict.keys(), foldsek_dict.keys()):
+
+    for ch, fch in zip(label_dict.keys(), fs_keys):
         bi.log(4, "Merging foldseek_dict:", ch, fch)
         if mode == "full":
             if foldsek_dict[ch] is None:
@@ -133,7 +143,7 @@ def run_saprot(name, mode, foldseek_path, label_path, save_folder):
                 bi.log("warning", "unknown atom in chain:", ch)
                 [bi.log("warning", f"{r["res"]} -> {r["resn"]} / {r["resn3"]}") for r in label_dict[ch].values() if None in [r["res"], r["resn"], r["resn3"]]]
         elif mode == "seq":
-            seqs[ch] = [f"{l["resn"]}#" for l in label_dict[ch]]
+            seqs[ch] = [f"{l["resn"]}#" for l in label_dict[ch].values()]
         else:
             bi.log("error", "Unknown SaProt mode:", mode)
     #print("FOLDSEEK", seqs.keys())
