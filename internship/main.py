@@ -2,7 +2,7 @@
 import os, sys, subprocess
 import json
 import numpy as np
-
+from matplotlib.style.core import available
 
 import setup
 setup.init()
@@ -24,6 +24,7 @@ run_embeddings = "-e" in sys.argv
 train = "-t" in sys.argv
 predict = "-p" in sys.argv
 curate = not("--no-curate" in sys.argv)
+terminal = True
 if "--all" in sys.argv:
     run_labels = True
     run_embeddings = True
@@ -271,71 +272,145 @@ if train:
 
 
 if predict:
-    bi.log("start", "Predicting...")
+    bi.log("start", "PREDICT")
+
+    details = {}
+
+    if terminal:
+        bi.log("header", "Terminal mode")
+
+        mode_ok = False
+        available_models = [os.path.basename(m) for m in os.listdir("models")]
+        while not mode_ok:
+            bi.log("header", "Please select model to use:")
+            [bi.log(1, f"{n}: {m}") for n, m in enumerate(available_models)]
+            i = input("\n>>> ")
+
+            try:
+                model_name = available_models[int(i)]
+                mode_ok = True
+            except:
+                bi.log("error", "Invalid model selected:", i)
+        bi.log(1, "Model selected:", model_name)
+        details["model_name"] = model_name
+
+        sequence_ok = False
+        while not sequence_ok:
+            bi.log("header", "Please introduce sequence to predict")
+            i = input("\n>>> ")
+
+            try:
+
+                sequence = bi.utilities.clean_string(i, allow=["#", "-"])
+                assert len(sequence) > 0
+                sequence_ok = True
+            except:
+                bi.log("error", "Please introduce a valid sequence:", i)
+        bi.log(2, "Input sequence:\n", sequence)
+        details["sequence"] = sequence
+
+        pdb_ok = False
+        while not pdb_ok:
+            bi.log("header", "Please introduce PDB (code or path) to overlay prediction")
+            bi.log(1, "Leave blank for no structural representation")
+            i = input("\n>>> ")
+
+            if len(i) == 0:
+                bi.log(2, "No structure selected")
+                details["pdb_code"] = None
+                details["pdb_path"] = None
+
+                pdb_ok = True
+            elif len(i) == 4:
+                details["pdb_code"] = i.upper()
+                details["pdb_path"] = None
+                bi.log(2, "PDB code:", details["pdb_code"])
+                pdb_ok = True
+            elif os.path.exists(i):
+                details["pdb_path"] = os.path.abspath(i)
+                details["pdb_code"] = None
+                bi.log(2, "PDB path:", details["pdb_path"])
+                pdb_ok = True
+            else:
+                bi.log("error", "Invalid PDB code (or file does not exist):", i)
+
+
+
+
+
+
+    # INPUT READY
+    bi.log("header", "Input received!")
+    print(json.dumps(details, indent=4))
+
 
     from models import get_model_class
-
-
-
-    model_class = get_model_class(config["predict"]["selected"]["model"])
-    bi.log("header", model_class)
-
-    import Bio
-
+    model_class = get_model_class(details["model_name"].split("_")[0].split("-")[0])
+    bi.log(1, "Model requested:")
+    if model_class is None:
+        bi.log(2, model_class)
+        bi.log("error", "model name not recognised:", details["model_name"].split("_")[0].split("-")[0])
+        model_class = get_model_class(input("Enter manually (1 chance only)\n>>> ").strip())
+        if model_class is None:
+            bi.log("error", "Not recognised either sorry")
+            exit()
+        else:
+            bi.log(2, "Good job!")
+    bi.log(2, model_class)
 
     try:
-        seq_index = sys.argv.index("-s") + 1
-        sequence = sys.argv[seq_index]
-    except Exception as e:
-        bi.log("error", "no input sequence provided (-s)")
-        sequence = bi.utilities.strings.clean_string(input("Please enter a sequence to predict: \n>>> ").replace(" ", ""))
-    if len(sequence) == 0:
-        bi.log("error", "No input sequence provided")
-        exit()
+        label_method = details["model_name"].split("_")[2]
+    except:
+        label_method = None
+    bi.log(1, "Labels requested:", label_method)
+    if label_method not in config["labels"].keys():
+        bi.log("error", "Label method not recognised:", details["model_name"].split("_")[0])
+        [bi.log(2, l) for l in config["labels"].keys()]
+        label_method = input("Enter manually (1 chance only)\n>>> ").strip()
+        if label_method not in config["labels"].keys():
+            bi.log("error", "Not recognised either sorry")
+            exit()
+        else:
+            bi.log(2, "Good job!")
+    bi.log(2, label_method)
+
 
 
     os.makedirs("pred", exist_ok=True)
-
-
     n = 0
     fname = f"prediction_{bi.utilities.strings.add_front_0(n, 3)}"
     while os.path.exists(f"pred/{fname}"):
         n += 1
         fname = f"prediction_{bi.utilities.strings.add_front_0(n, 3)}"
 
-    os.makedirs(f"pred/{fname}", exist_ok=True)
+    bi.log("header", f"Starting prediction: {fname}")
+
+    os.makedirs(f"pred/{fname}")
+    bi.log(1, "Prediction folder:", os.path.abspath(f"pred/{fname}"))
 
     structure = None
-    try:
-        pdb_index = sys.argv.index("-pdb") + 1
-        pdb_code = sys.argv[pdb_index]
-    except Exception as e:
-        bi.log("error", "no pdb code or file provided (-pdb)")
-        pdb_code = bi.utilities.strings.clean_string(input("Please enter a pdb code or file path to compare: \n>>> ").strip())
-    if len(pdb_code) == 0:
-        bi.log("error", "No input pdb provided")
-    elif len(pdb_code) == 4:
-        download_folder = bi.imports.downloadPDB("pred", fname, [pdb_code], file_format="cif")
-        file_path = os.path.join(download_folder, f"{pdb_code}.cif")
+    if details["pdb_code"] is not None:
+        download_folder = bi.imports.downloadPDB("pred", fname, [details["pdb_code"]], file_format="cif")
+        file_path = os.path.join(download_folder, f"{details["pdb_code"]}.cif")
         structure = bi.imports.loadPDB(file_path)
-    else:
-        if os.path.exists(pdb_code):
-            structure = bi.imports.loadPDB(pdb_code)
+    elif details["pdb_path"] is not None:
+        if os.path.exists(details["pdb_path"]):
+            structure = bi.imports.loadPDB(details["pdb_path"])
         else:
-            bi.log("error", "Provided path does not exist: {}".format(pdb_code))
+            bi.log("error", "Provided path does not exist: {}".format(details["pdb_path"]))
             exit()
     print(structure)
+
     bi.log("header", "Sequence:")
-    dssp = {"A":{str(n):{
+    labels = {"A":{str(n):{
         "resn":name,
         "ss": "#",
         "res":n,
     } for n, name in enumerate(sequence)}}
-    print("".join([r["resn"] for r in dssp["A"].values()]))
-    print("length:", len(dssp["A"]))
+    print("".join([r["resn"] for r in labels["A"].values()]))
+    print("length:", len(labels["A"]))
 
 
-    bi.log(1, "Assigned id:", fname)
     json.dump({
         "sequence": "".join([r["resn"] for r in dssp["A"].values()]),
         "dssp": dssp}, open(f"pred/{fname}/{fname}.json", "w"))
@@ -408,7 +483,7 @@ if predict:
 
 
 
-    bi.log("end")
+    bi.log("end", "PREDICT")
 
 
 

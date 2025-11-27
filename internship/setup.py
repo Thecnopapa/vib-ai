@@ -81,7 +81,7 @@ def configuration():
                 exit()
         else:
             dataset = config["data"]["default"]
-        bi.log("header", "Using dataset:", dataset)
+        bi.log(1, "Using dataset:", dataset)
         config["data"]["selected"] = config["data"][dataset]
 
 
@@ -111,7 +111,7 @@ def configuration():
             exit()
     else:
         training_setting = config["training"]["default"]
-    bi.log("header", "Training setting:", training_setting)
+    bi.log(1, "Training setting:", training_setting)
     config["training"]["selected"] = config["training"][training_setting]
 
 

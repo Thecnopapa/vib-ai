@@ -26,26 +26,26 @@
             "abbreviation": "ss",
             "classes": ["H", "B" ,"G" ,"I" ,"P" ,"E" ,"T", "S" ,"#"]
         },
-        "sasa_res": {
+        "sasa-res": {
             "method": "sasa",
-            "save_folder": "labels/sasa",
+            "save_folder": "labels/sasa_res",
             "abbreviation": "sasa",
             "scope": "R",
-            "probe_radius": 1.40,
+            "probe-radius": 1.40,
             "threshold": 20.0,
             "classes": ["I", "O" ,"C" ,"#"]
         }
     },
     "embeddings": {
-      "default": "SaProt_full",
-        "SaProt_full":{
+      "default": "SaProt-full",
+        "SaProt-full":{
             "model": "SaProt",
             "mode": "full",
             "dimensions": 480,
             "save_folder": "embeddings/SaProt_full",
             "foldseek_folder": "raw/foldseek"
         },
-        "SaProt_seq": {
+        "SaProt-seq": {
             "model": "SaProt",
             "mode": "seq",
             "dimensions": 480,
@@ -54,23 +54,23 @@
     },
 
     "training": {
-        "default": "MLP_20",
-        "MLP_10": {
+        "default": "MLP-20",
+        "MLP-10": {
             "model": "MLP",
-            "embeddings": "SaProt_full",
+            "embeddings": "SaProt-full",
             "epochs":100,
             "batch_size": 32,
             "shuffle": false,
             "test_ratio": 0.2
         },
-        "MLP_20": {
+        "MLP-20": {
             "model": "MLP",
             "epochs": 20,
             "batch_size": 64,
             "shuffle": false,
             "test_ratio": 0.2
         },
-        "MLP_50": {
+        "MLP-50": {
             "model": "MLP",
             "epochs": 50,
             "batch_size": 128,
@@ -86,20 +86,20 @@
         "internship-large": {
             "data": "mega-batch",
             "labels": "dssp",
-            "embeddings": "SaProt_full",
-            "training": "MLP_10"
+            "embeddings": "SaProt-full",
+            "training": "MLP-10"
         },
         "internship-receptors": {
             "data": "receptors",
             "labels": "dssp",
-            "embeddings": "SaProt_full",
-            "training": "MLP_20"
+            "embeddings": "SaProt-full",
+            "training": "MLP-20"
         },
-        "receptor_sasa": {
+        "receptor-sasa": {
             "data": "receptors",
-            "labels": "sasa_res",
-            "embeddings": "SaProt_full",
-            "training": "MLP_20"
+            "labels": "sasa-res",
+            "embeddings": "SaProt-full",
+            "training": "MLP-20"
         }
     }
 }
