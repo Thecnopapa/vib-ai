@@ -216,7 +216,7 @@ internship/exports
 internship/models
 internship/pred
 internship/figs
-#internship/logs
+internship/logs
 internship/raw
 internship/labels
 internship/bin/foldseek
