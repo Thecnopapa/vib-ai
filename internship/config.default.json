@@ -25,6 +25,14 @@
             "raw_folder": "raw/dssp",
             "abbreviation": "ss",
             "classes": ["H", "B" ,"G" ,"I" ,"P" ,"E" ,"T", "S" ,"#"]
+        },
+        "sasa_res": {
+            "method": "sasa",
+            "save_folder": "labels/sasa",
+            "raw_folder": "raw/sasa",
+            "abbreviation": "sasa",
+            "scope": "R",
+            "classes": ["I", "O" ,"C" ,"#"]
         }
     },
     "embeddings": {
@@ -78,8 +86,15 @@
 
     },
     "setups": {
+        "default": "internship-receptors",
         "internship-large": {
             "data": "mega-batch",
+            "labels": "dssp",
+            "embeddings": "SaProt_full",
+            "training": "MLP_SP_full"
+        },
+        "internship-receptors": {
+            "data": "receptors",
             "labels": "dssp",
             "embeddings": "SaProt_full",
             "training": "MLP_SP_full"

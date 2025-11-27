@@ -1,13 +1,12 @@
 
-import os, sys, subprocess, datetime
-
+import os, sys, subprocess
 import json
 import numpy as np
 
 
 import setup
 setup.init()
-from setup import bioiain, bi, config
+from setup import bioiain, bi, config, log_file
 
 from bioiain.biopython.DSSP import ss_to_index, index_to_ss
 from embeddings import run_foldseek, generate_embeddings
@@ -15,42 +14,41 @@ from embeddings import run_foldseek, generate_embeddings
 
 
 bi.log("start", "internship > main.py")
-os.makedirs("logs", exist_ok=True)
-log_file = "log_{}".format(len(os.listdir("logs")))
+
 
 
 skip_download = "--no-download" in sys.argv
 force = "-f" in sys.argv
-embeddings = "-e" in sys.argv
+run_labels = "-l" in sys.argv
+run_embeddings = "-e" in sys.argv
 train = "-t" in sys.argv
 predict = "-p" in sys.argv
 curate = not("--no-curate" in sys.argv)
+if "--all" in sys.argv:
+    run_labels = True
+    run_embeddings = True
+    train = True
 
 config["general"]["force"] = force
 bi.log("header", "FORCE:", force)
 
-with open(f"logs/{log_file}", "w") as log:
+with open(f"logs/{log_file}", "a") as log:
     log.write(f"""
-{datetime.datetime.now()}
-    
-### ### Log file: {log_file}
-    
-### CMD
 
-    {" ".join(sys.argv)}
-    
-### ARGVS
-    
+### ### ARGVS
+
     Force: {force}
-    
+
     Download: {not skip_download}
-    Embeddings: {embeddings}
+    Labels: {run_labels}
+    Embeddings: {run_embeddings}
     Training: {train}
         Curate: {curate}
     Predict: {not predict}
-    
+
 ###
 """)
+
 
 np.random.seed(config["general"]["np_random"])
 
@@ -58,21 +56,12 @@ np.random.seed(config["general"]["np_random"])
 data_folder = None
 if not predict:
     bi.log("start", "Data Load")
-    if "--data" in sys.argv:
-        try:
-            dataset = sys.argv[sys.argv.index("--data") + 1]
-        except:
-            bi.log("error", "Dataset not provided")
-            exit()
-    else:
-        dataset = config["data"]["default"]
-    bi.log("header", "Using dataset:", dataset)
-    config["data"]["selected"] = config["data"][dataset]
+
     try:
-        data_folder=config["data"][dataset]["folder_name"]
-        pdb_list_file = config["data"][dataset]["pdb_list"]
+        data_folder=config["data"]["selected"]["folder_name"]
+        pdb_list_file = config["data"]["selected"]["pdb_list"]
     except:
-        bi.log("error", f"Dataset not configured: {dataset}")
+        bi.log("error", "Dataset not configured")
         exit()
 
     if skip_download:
@@ -95,7 +84,6 @@ if not predict:
 
 ### DATA CONFIG
 
-    Name: {dataset}
 {json.dumps(config["data"]["selected"], indent=2)}
         
 ### STRUCTURE LIST
@@ -106,8 +94,10 @@ if not predict:
 """)
 
 
-if embeddings:
-    bi.log("start", "Labels and Embeddings")
+if run_labels:
+    bi.log("start", "LABELS")
+    label_folder = config["labels"]["selected"]["save_folder"]
+    bi.log(2, "Label folder:", label_folder)
     for file in structure_list:
         name = file.split(".")[0]
 
@@ -117,14 +107,8 @@ if embeddings:
         last_chain = [c.id for c in structure.get_chains()][-1]
         bi.log(1, "Last Chain:", last_chain)
 
-        if "--labels" in sys.argv:
-            label_method = sys.argv[sys.argv.index("--labels") + 1]
-        else:
-            label_method = config["labels"]["default"]
-        bi.log(1, "Label method:", label_method)
-        config["labels"]["selected"] = config["labels"][label_method]
-        label_folder = config["labels"][label_method]["save_folder"]
-        bi.log(2, "Label folder:", label_folder)
+
+
         #print(os.path.exists(os.path.join(label_folder, f"{name}.labels.json")), force)
         #print(os.path.join(label_folder, f"{name}_{last_chain}.labels.json"))
         if not (os.path.exists(os.path.join(label_folder, f"{name}.labels.json"))) or force:
@@ -132,32 +116,43 @@ if embeddings:
             from labels import generate_labels
             if not generate_labels(name, structure):
                 continue
-
-        if "--embedding" in sys.argv:
-            embedding_method = sys.argv[sys.argv.index("--embedding") + 1]
-        else:
-            embedding_method = config["embeddings"]["default"]
-        bi.log(1, "Embedding method:", embedding_method)
-        config["embeddings"]["selected"] = config["embeddings"][embedding_method]
-        embedding_folder = config["embeddings"][embedding_method]["save_folder"]
-        bi.log(2, "Embedding Folder:", embedding_folder)
-        #print(os.path.exists(os.path.join(embedding_folder, f"{name}_{last_chain}.pt")))
-        #print(os.path.join(embedding_folder, f"{name}_{last_chain}.pt"))
-        if not (os.path.exists(os.path.join(embedding_folder, f"{name}_{last_chain}.pt"))) or force:
-            generate_embeddings(name, structure)
-    bi.log("end", "Labels and Embeddings")
+    bi.log("end", "LABELS")
     with open(f"logs/{log_file}", "a") as log:
         log.write(f"""
 
 ### ### LABELS
-    
+
     N labels: {len(os.listdir(label_folder))}
     Folder: {os.path.abspath(label_folder)}
 
 ### LABEL CONFIG
 
-    Name: {label_method}
 {json.dumps(config["labels"]["selected"], indent=2)}
+
+""")
+
+
+if run_embeddings:
+    bi.log("start", "EMBEDDINGS")
+    embedding_folder = config["embeddings"]["selected"]["save_folder"]
+    bi.log(1, "Embedding Folder:", embedding_folder)
+    for file in structure_list:
+        name = file.split(".")[0]
+
+        structure = bi.biopython.loadPDB(os.path.join(file_folder, f"{name}.cif"))
+        bi.log("header", "Structure:", structure)
+
+        last_chain = [c.id for c in structure.get_chains()][-1]
+        bi.log(1, "Last Chain:", last_chain)
+
+
+        #print(os.path.exists(os.path.join(embedding_folder, f"{name}_{last_chain}.pt")))
+        #print(os.path.join(embedding_folder, f"{name}_{last_chain}.pt"))
+        if not (os.path.exists(os.path.join(embedding_folder, f"{name}_{last_chain}.pt"))) or force:
+            generate_embeddings(name, structure)
+    bi.log("end", "EMBEDDINGS")
+    with open(f"logs/{log_file}", "a") as log:
+        log.write(f"""
 
 ### ### EMBEDDINGS
     
@@ -180,20 +175,11 @@ if train:
     from training import train_mlp, split_sample
     from plotting import plot_confusion, plot_embeddings
 
-    if "--model" in sys.argv:
-        try:
-            training_setting = sys.argv[sys.argv.index("--model") + 1]
-        except:
-            bi.log("error", "Training settings not provided")
-            exit()
-    else:
-        training_setting = config["training"]["default"]
-    bi.log("header", "Training setting:", training_setting)
-    config["training"]["selected"] = config["training"][training_setting]
+
     try:
-        model_name=config["training"][training_setting]["model"]
-        embedding_name = config["training"][training_setting]["embeddings"]
-        label_name = config["training"][training_setting]["labels"]
+        model_name=config["training"]["selected"]["model"]
+        embedding_name = config["training"]["selected"]["embeddings"]
+        label_name = config["training"]["selected"]["labels"]
     except:
         bi.log("error", f"Training settings not configured: {training_setting}")
         exit()

@@ -1,23 +1,26 @@
 
-2025-11-27 11:52:45.404018
+2025-11-27 12:01:25.757481
     
-### ### Log file: log_5
+### ### Log file: log_2025-11-27 12:01:25.757481
     
 ### CMD
 
     main.py -l
     
-### ARGVS
-    
+###
+
+
+### ### ARGVS
+
     Force: False
-    
+
     Download: True
     Labels: True
     Embeddings: False
     Training: False
         Curate: True
     Predict: True
-    
+
 ###
 
         

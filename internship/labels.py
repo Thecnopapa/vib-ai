@@ -33,15 +33,16 @@ def generate_labels(name, structure=None):
                  config["labels"]["selected"]["abbreviation"])
 
     elif method == "sasa":
-        bi.log(3, "Detected method: SASA")
-        raise Exception("SASA not implemented")
+        bi.log(3, "Selected method: SASA")
+        calculate_sasa
 
     else:
         bi.log("error", "Label generator method not recognised:", config["labels"]["selected"]["method"] )
 
 
 
-
+def calculate_sasa(name, label_dict, save_folder, raw_folder, abbreviation):
+    pass
 
 
 def run_dssp(name, label_dict, data_folder, save_folder, raw_folder, abbreviation):
