@@ -29,9 +29,10 @@
         "sasa_res": {
             "method": "sasa",
             "save_folder": "labels/sasa",
-            "raw_folder": "raw/sasa",
             "abbreviation": "sasa",
             "scope": "R",
+            "probe_radius": 1.40,
+            "threshold": 10,
             "classes": ["I", "O" ,"C" ,"#"]
         }
     },

@@ -2,11 +2,13 @@
 
 import os, sys, subprocess, json
 
+
+
 from setup import config, bi, bioiain
-from Bio.PDB import Polypeptide
 
-
-
+print(bioiain)
+from bioiain.utilities import d3to1
+from bioiain.visualisation import quick_display
 
 
 
@@ -24,28 +26,65 @@ def generate_labels(name, structure=None):
         except:
             bi.log("error", "DSSP command not found")
             exit()
-        assert structure is not None
         #print(json.dumps(config["labels"]["selected"], indent=4))
         return run_dssp(name, label_dict,
                  "data/"+config["data"]["selected"]["folder_name"],
                  config["labels"]["selected"]["save_folder"],
                  config["labels"]["selected"]["raw_folder"],
-                 config["labels"]["selected"]["abbreviation"])
+                 config["labels"]["selected"]["abbreviation"],
+                        structure=structure)
 
     elif method == "sasa":
         bi.log(3, "Selected method: SASA")
-        calculate_sasa
+        assert structure is not None
+        calculate_sasa(name, label_dict, structure,
+                       "data/" + config["data"]["selected"]["folder_name"],
+                       config["labels"]["selected"]["save_folder"],
+                       config["labels"]["selected"]["abbreviation"])
 
     else:
         bi.log("error", "Label generator method not recognised:", config["labels"]["selected"]["method"] )
 
 
 
-def calculate_sasa(name, label_dict, save_folder, raw_folder, abbreviation):
-    pass
+def calculate_sasa(name, label_dict, structure, data_folder, save_folder, abbreviation):
+    from Bio.PDB.SASA import ShrakeRupley
+    os.makedirs(save_folder, exist_ok=True)
+    probe_radius = config["labels"]["selected"]["probe_radius"]
+    scope = config["labels"]["selected"]["scope"]
+    threshold = config["labels"]["selected"]["threshold"]
 
 
-def run_dssp(name, label_dict, data_folder, save_folder, raw_folder, abbreviation):
+    SR = ShrakeRupley(probe_radius=probe_radius)
+    SR.compute(structure, level=scope)
+
+    for chain in structure[0].get_chains():
+        ch = chain.id
+        for res in chain.get_residues():
+            print(ch, res.id, res.sasa)
+            if res.id[0] == " ":
+                try:
+                    label_dict[ch][len(label_dict[ch])] = {
+                        "res": len(label_dict[ch]),
+                        "resn3": res.resname,
+                        "resn": d3to1[res.resname],
+                        abbreviation+"_raw": res.sasa,
+                        abbreviation: int(res.sasa > threshold)
+                    }
+                    res.bfactor = res.sasa,
+                except:
+                    res.bfactor = 0
+                    bi.log("warning", "Residue not recognised:", res.resname)
+    with open(f"{save_folder}/{name}.labels.json", "w") as f:
+        f.write(json.dumps(label_dict, indent=4))
+
+
+    quick_display(structure)
+
+    exit()
+
+
+def run_dssp(name, label_dict, data_folder, save_folder, raw_folder, abbreviation, structure=None):
     os.makedirs(raw_folder, exist_ok=True)
     os.makedirs(save_folder, exist_ok=True)
 
