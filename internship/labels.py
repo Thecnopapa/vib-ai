@@ -50,7 +50,7 @@ def generate_labels(name, structure=None):
 def calculate_sasa(name, label_dict, structure, data_folder, save_folder, abbreviation):
     from Bio.PDB.SASA import ShrakeRupley
     os.makedirs(save_folder, exist_ok=True)
-    probe_radius = config["labels"]["selected"]["probe_radius"]
+    probe_radius = config["labels"]["selected"]["probe-radius"]
     scope = config["labels"]["selected"]["scope"]
     threshold = config["labels"]["selected"]["threshold"]
 
