@@ -15,7 +15,8 @@ seaborn
 transformers
 torch
 scikit-learn
-
+plotly
+kaleido
 
 --extra-index-url=https://test.pypi.org/simple/
 bioiain >= 0.0.5.2

@@ -223,6 +223,10 @@ internship/bin/foldseek
 internship/bin/dssp
 internship/.temp
 
+projections/data
+
+
+
 config.custom.json
 
 */*.swp
