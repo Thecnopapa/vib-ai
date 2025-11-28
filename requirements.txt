@@ -14,9 +14,11 @@ unidecode >= 1.4.0
 seaborn
 transformers
 torch
+torchvision
 scikit-learn
 plotly
 kaleido
+pillow
 
 --extra-index-url=https://test.pypi.org/simple/
 bioiain >= 0.0.5.2

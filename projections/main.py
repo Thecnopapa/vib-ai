@@ -48,7 +48,7 @@ def get_PCA(code):
 
     print(bi)
     #from bioiain import visualisation
-    fig = plt.figure()
+    fig = plt.figure(figsize=(10,10))
     ax = fig.add_subplot(111)
 
     ax.scatter(projected[:, 0], projected[:, 1], c="black", marker=".")
@@ -64,7 +64,18 @@ def get_PCA(code):
         ax.plot(projected[i:i+2, 0], projected[i:i+2, 1], color="#00000050")
     fig.savefig(f"{code}_connected.png")
     # Pad the saved area by 10% in the x-direction and 20% in the y-direction
-    plt.show(block=True)
+    plt.show(block=False)
+
+    import PIL
+    img = PIL.Image.open(f"{code}_connected.png")
+
+    import torchvision as tv
+    tensor = tv.transforms.functional.pil_to_tensor(img)
+    print(tensor)
+    print(tensor.shape)
+
+    plt.imshow(tensor[0].numpy())
+    plt.savefig(f"{code}_tensor.png")
 
 
 
