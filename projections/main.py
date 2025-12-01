@@ -36,14 +36,39 @@ def get_PCA():
     for file in os.listdir(file_folder):
         code = file.split(".")[0]
         structure = bi.biopython.loadPDB(os.path.join(file_folder, f"{code}.cif"))
-        print(structure)
-        for chain in structure[0].get_chains():
+        header = bioiain.biopython.imports.read_mmcif(os.path.join(file_folder, file))
+        labels = {}
+        chains = list(structure.get_chains())
+        for i, entity_poly in enumerate(header["_entity_poly"]):
+            bi.log(1, i)
+            for strand in entity_poly["pdbx_strand_id"].split(","):
+                strand = strand.strip()
+                bi.log(2, strand)
+                print(chains[1].__dict__.keys())
+                print(chains[1]._id, chains[1].id, chains[1].full_id )
+                print(strand, chains, strand in chains)
+                if strand in [c.id for c in chains]:
+                    labels[strand] = {"description": header["_entity"][i]["pdbx_description"],
+                                      "length": [len(list(c.get_residues())) for c in chains if c.id == strand][0],
+                                      "chain":[c for c in chains if c.id == strand][0]}
 
+        print(labels)
+
+
+
+
+
+
+        for l in labels:
+            print(type(l["chain"]))
+            chain = l["chain"]
+            label = l["description"]
+            print(chain, label)
             coords = [a.coord for a in chain.get_atoms() if a.id == "CA"]
             if len(coords) < 10:
                 continue
-            print(coords[:10])
-            print(len(coords))
+            #print(coords[:10])
+            #print(len(coords))
             pca = PCA(n_components=3)
             pca.fit(coords)
             print(pca.components_)
@@ -58,38 +83,36 @@ def get_PCA():
 
             ax.scatter(projected[:, 0], projected[:, 1], c="black", marker=".")
             ax.set_aspect("equal")
-
-            #ax.spines[['top', 'right', 'bottom', 'left']].set_visible(False)
-            #extent = ax.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
             ax.axis('off')
-            #fig.savefig(f'{code}.png', bbox_inches=extent)
+
             os.makedirs("imgs/projected", exist_ok=True)
             os.makedirs("imgs/connected", exist_ok=True)
+            os.makedirs("labels", exist_ok=True)
 
-            fig.savefig(f"imgs/projected/{code}_{chain.id}.png")
+            projected_path = f"imgs/projected/{code}_{chain.id}.png"
+            connected_path = f"imgs/connected/{code}_{chain.id}.png"
+
+            fig.savefig(projected_path)
 
             for i in range(len(projected)-1):
                 ax.plot(projected[i:i+2, 0], projected[i:i+2, 1], color="#00000050")
-            fig.savefig(f"imgs/connected/{code}_{chain.id}.png")
-            # Pad the saved area by 10% in the x-direction and 20% in the y-direction
-            #plt.show(block=False)
+            fig.savefig(connected_path)
+
             plt.clf()
 
-            # import PIL
-            # img = PIL.Image.open(f"{code}_connected.png")
-            # img = img.convert("RGB")
-            #
-            # import torchvision as tv
-            # from torchvision.utils import save_image
-            # tensor = tv.transforms.functional.pil_to_tensor(img)
-            # print(tensor)
-            # print(tensor.shape)
-            # #save_image(tensor[1], f"{code}_tensor2.png")
-            # plt.imshow(tensor)
-            # #arr = np.ndarray(tensor.numpy())  # This is your tensor
-            # #arr_ = np.squeeze(arr)  # you can give axis attribute if you wanna squeeze in specific dimension
-            # #plt.imshow(arr_)
-            # plt.savefig(f"{code}_tensor.png")
+            exp = {
+                "label": label,
+                "file": file,
+                "chain": chain,
+                "paths": {
+                    "connected": connected_path,
+                    "projected": projected_path
+                }
+            }
+            json.dump(exp, open(f"labels/{code}_{chain.id}.labels.json", "w"))
+
+
+
 
 
 def image_classifier():
