@@ -39,18 +39,27 @@ def get_PCA():
         header = bioiain.biopython.imports.read_mmcif(os.path.join(file_folder, file))
         labels = {}
         chains = list(structure.get_chains())
-        for i, entity_poly in enumerate(header["_entity_poly"]):
+
+        if type(header["_entity_poly"]) is dict:
+            poly = [header["_entity_poly"]]
+        else:
+            poly = header["_entity_poly"]
+        for i, entity_poly in enumerate(poly):
             bi.log(1, i)
+            print(entity_poly)
+            print(entity_poly["pdbx_strand_id"])
+
+
             for strand in entity_poly["pdbx_strand_id"].split(","):
                 strand = strand.strip()
                 bi.log(2, strand)
-                print(chains[1].__dict__.keys())
-                print(chains[1]._id, chains[1].id, chains[1].full_id )
+                print(chains[0].__dict__.keys())
+                print(chains[0]._id, chains[0].id, chains[0].full_id )
                 print(strand, chains, strand in chains)
                 if strand in [c.id for c in chains]:
                     labels[strand] = {"description": header["_entity"][i]["pdbx_description"],
                                       "length": [len(list(c.get_residues())) for c in chains if c.id == strand][0],
-                                      "chain":[c for c in chains if c.id == strand][0]}
+                                      "chain":list([c for c in chains if c.id == strand])[0]}
 
         print(labels)
 
@@ -59,7 +68,8 @@ def get_PCA():
 
 
 
-        for l in labels:
+        for ch, l in labels.items():
+            print(l)
             print(type(l["chain"]))
             chain = l["chain"]
             label = l["description"]
@@ -78,7 +88,7 @@ def get_PCA():
 
             print(bi)
             #from bioiain import visualisation
-            fig = plt.figure(figsize=(10,10))
+            fig = plt.figure(figsize=(1,1))
             ax = fig.add_subplot(111)
 
             ax.scatter(projected[:, 0], projected[:, 1], c="black", marker=".")
@@ -103,41 +113,115 @@ def get_PCA():
             exp = {
                 "label": label,
                 "file": file,
-                "chain": chain,
+                "chain": chain.id,
                 "paths": {
                     "connected": connected_path,
                     "projected": projected_path
                 }
             }
-            json.dump(exp, open(f"labels/{code}_{chain.id}.labels.json", "w"))
+            json.dump(exp, open(f"labels/{code}_{chain.id}.labels.json", "w"), indent=4)
 
 
+import torch
+import torchvision
+import torchvision.transforms as transforms
+import torchvision.datasets.vision as vision
+from torch.utils.data import Dataset, DataLoader
+from PIL import Image
+from sklearn.model_selection import train_test_split
 
 
 
 def image_classifier():
-    import torch
-    import torchvision
-    import torchvision.transforms as transforms
 
     transform = transforms.Compose(
         [transforms.ToTensor(),
-         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+         transforms.Normalize((0.5, 0.5, 0.5, 0.5), (0.5, 0.5, 0.5, 0.5))])
+
+    structure_list = []
+
+    label_to_index = {}
+    index_to_label = {}
+    labs = []
+    for file in os.listdir("imgs/connected"):
+        name = file.split(".")[0]
+        l_path = os.path.join("labels", f"{name}.labels.json")
+        if os.path.exists(l_path):
+            labs.append(json.load(open(l_path))["label"].lower().strip())
+            structure_list.append(name)
+    labs = list(set(labs))
+    for n, l in enumerate(labs):
+        label_to_index[l] = n
+        index_to_label[n] = l
+
+    class ImageDataset(Dataset):
+        def __init__(self, struc_list, folder, label_folder=None):
+            self.structures = struc_list
+            self.folder = folder
+            if label_folder is None:
+                self.label_folder = folder
+            else:
+                self.label_folder = label_folder
+
+            self.images = []
+            self.labels = []
+            for file in os.listdir(self.folder):
+                name = file.split(".")[0]
+                if name not in struc_list:
+                    continue
+                l_path = os.path.join(self.label_folder, f"{name}.labels.json")
+                if os.path.exists(l_path):
+                    labs.append(json.load(open(l_path))["label"])
+                    self.labels.append(f"{name}.labels.json")
+                    self.images.append(file)
+
+
+        def __len__(self):
+            return len(self.images)
+
+
+
+        def __getitem__(self, idx):
+            fname = self.images[idx]
+            name = os.path.basename(fname).split(".")[0]
+            code, ch = name.split("_")
+
+            i_path = os.path.join(self.folder, fname)
+            l_path = os.path.join(self.label_folder, f"{name}.labels.json")
+
+            image = Image.open(i_path)
+            #image = image.convert("RGB")
+            image = transform(image)
+
+            label = label_to_index[json.load(open(l_path))["label"].lower().strip()]
+
+            # print("emb:", emb.shape, "lab:", lab)
+            return image, label
+
+
+
+
 
     batch_size = 4
 
-    trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
-                                            download=True, transform=transform)
-    trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size,
-                                              shuffle=True, num_workers=0)
+    print(len(structure_list))
+    print(labs)
 
-    testset = torchvision.datasets.CIFAR10(root='./data', train=False,
-                                           download=True, transform=transform)
-    testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size,
-                                             shuffle=False, num_workers=0)
+    train_list, test_list = train_test_split(structure_list, test_size=0.2, random_state=42)
 
-    classes = ('plane', 'car', 'bird', 'cat',
-               'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
+
+    #trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=transform)
+    trainset = ImageDataset(train_list, folder="imgs/connected", label_folder="labels")
+    testset = ImageDataset(test_list, folder="imgs/connected", label_folder="labels")
+
+
+    trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=False, num_workers=0)
+    testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=0)
+
+    print(trainset)
+    print(trainloader)
+
+    classes = labs
 
     import matplotlib.pyplot as plt
     import numpy as np
@@ -153,6 +237,12 @@ def image_classifier():
 
 
     # get some random training images
+    # print(len(trainset))
+    # t = []
+    # for i in range(4):
+    #     t.append([trainset[i]])
+    #
+    # images, labels = zip([[z[0], z[1]] for z in t])
     dataiter = iter(trainloader)
     images, labels = next(dataiter)
 
@@ -167,7 +257,7 @@ def image_classifier():
     class Net(nn.Module):
         def __init__(self):
             super().__init__()
-            self.conv1 = nn.Conv2d(3, 6, 5)
+            self.conv1 = nn.Conv2d(4, 6, 5)
             self.pool = nn.MaxPool2d(2, 2)
             self.conv2 = nn.Conv2d(6, 16, 5)
             self.fc1 = nn.Linear(16 * 5 * 5, 120)
@@ -271,9 +361,10 @@ def image_classifier():
         print(f'Accuracy for class: {classname:5s} is {accuracy:.1f} %')
 
 
-
-get_PCA()
-#image_classifier()
+if "-l" in sys.argv or "-e" in sys.argv:
+    get_PCA()
+if "-t" in sys.argv:
+    image_classifier()
 
 
 

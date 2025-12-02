@@ -226,7 +226,8 @@ internship/.temp
 projections/data
 projections/imgs
 projections/exports
-
+projections/labels
+projections/headers
 
 
 config.custom.json
