@@ -2,6 +2,7 @@ import os, sys, json
 import numpy as np
 
 
+
 def import_bi():
     global bi
     global bioiain
@@ -27,13 +28,13 @@ import_bi()
 
 
 
-def get_PCA():
+def get_PCA(force=False):
     from sklearn.decomposition import PCA
     import plotly.graph_objs as go
     import matplotlib.pyplot as plt
-    file_folder = bi.biopython.downloadPDB("../internship/data", "receptors", file_path="../internship/data/receptors.txt", file_format="cif", overwrite=False)
+    file_folder = bi.biopython.downloadPDB("../internship/data", "mega-batch", file_path="../internship/data/mega-batch20K.txt", file_format="cif", overwrite=False)
 
-    for file in os.listdir(file_folder):
+    for file in sorted(os.listdir(file_folder)):
         code = file.split(".")[0]
         structure = bi.biopython.loadPDB(os.path.join(file_folder, f"{code}.cif"))
         header = bioiain.biopython.imports.read_mmcif(os.path.join(file_folder, file))
@@ -46,22 +47,22 @@ def get_PCA():
             poly = header["_entity_poly"]
         for i, entity_poly in enumerate(poly):
             bi.log(1, i)
-            print(entity_poly)
-            print(entity_poly["pdbx_strand_id"])
+            #print(entity_poly)
+            #print(entity_poly["pdbx_strand_id"])
 
 
             for strand in entity_poly["pdbx_strand_id"].split(","):
                 strand = strand.strip()
                 bi.log(2, strand)
-                print(chains[0].__dict__.keys())
-                print(chains[0]._id, chains[0].id, chains[0].full_id )
-                print(strand, chains, strand in chains)
+                #print(chains[0].__dict__.keys())
+                #print(chains[0]._id, chains[0].id, chains[0].full_id )
+                #print(strand, chains, strand in chains)
                 if strand in [c.id for c in chains]:
                     labels[strand] = {"description": header["_entity"][i]["pdbx_description"],
                                       "length": [len(list(c.get_residues())) for c in chains if c.id == strand][0],
                                       "chain":list([c for c in chains if c.id == strand])[0]}
 
-        print(labels)
+        #print(labels)
 
 
 
@@ -69,11 +70,14 @@ def get_PCA():
 
 
         for ch, l in labels.items():
-            print(l)
-            print(type(l["chain"]))
             chain = l["chain"]
+            if os.path.exists(f"labels/{code}_{chain.id}.labels.json") and not force:
+                continue
+            #print(l)
+            #print(type(l["chain"]))
+
             label = l["description"]
-            print(chain, label)
+            #print(chain, label)
             coords = [a.coord for a in chain.get_atoms() if a.id == "CA"]
             if len(coords) < 10:
                 continue
@@ -81,12 +85,12 @@ def get_PCA():
             #print(len(coords))
             pca = PCA(n_components=3)
             pca.fit(coords)
-            print(pca.components_)
+            #print(pca.components_)
 
             projected = pca.transform(coords)
-            print(projected[0:10])
+            #print(projected[0:10])
 
-            print(bi)
+            #print(bi)
             #from bioiain import visualisation
             fig = plt.figure(figsize=(1,1))
             ax = fig.add_subplot(111)
@@ -136,6 +140,7 @@ def image_classifier():
 
     transform = transforms.Compose(
         [transforms.ToTensor(),
+         transforms.Resize((32,32)),
          transforms.Normalize((0.5, 0.5, 0.5, 0.5), (0.5, 0.5, 0.5, 0.5))])
 
     structure_list = []
@@ -215,8 +220,8 @@ def image_classifier():
     testset = ImageDataset(test_list, folder="imgs/connected", label_folder="labels")
 
 
-    trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=False, num_workers=0)
-    testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=0)
+    trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=0)
+    testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=True, num_workers=0)
 
     print(trainset)
     print(trainloader)
@@ -255,14 +260,14 @@ def image_classifier():
     import torch.nn.functional as F
 
     class Net(nn.Module):
-        def __init__(self):
+        def __init__(self, n_features=10):
             super().__init__()
             self.conv1 = nn.Conv2d(4, 6, 5)
             self.pool = nn.MaxPool2d(2, 2)
             self.conv2 = nn.Conv2d(6, 16, 5)
             self.fc1 = nn.Linear(16 * 5 * 5, 120)
             self.fc2 = nn.Linear(120, 84)
-            self.fc3 = nn.Linear(84, 10)
+            self.fc3 = nn.Linear(84, n_features)
 
         def forward(self, x):
             x = self.pool(F.relu(self.conv1(x)))
@@ -273,7 +278,7 @@ def image_classifier():
             x = self.fc3(x)
             return x
 
-    net = Net()
+    net = Net(len(labs))
 
     import torch.optim as optim
 
@@ -292,6 +297,9 @@ def image_classifier():
 
             # forward + backward + optimize
             outputs = net(inputs)
+            #print(outputs.shape)
+            #print(inputs.shape)
+            #print(labels.shape)
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
@@ -312,16 +320,16 @@ def image_classifier():
 
     # print images
     imshow(torchvision.utils.make_grid(images))
-    print('GroundTruth: ', ' '.join(f'{classes[labels[j]]:5s}' for j in range(4)))
+    print('GroundTruth: ', ' '.join(f'{index_to_label[int(labels[j])]:5s}' for j in range(4)))
 
-    net = Net()
+    net = Net(n_features = len(labs))
     net.load_state_dict(torch.load(PATH, weights_only=True))
 
     outputs = net(images)
 
     _, predicted = torch.max(outputs, 1)
 
-    print('Predicted: ', ' '.join(f'{classes[predicted[j]]:5s}'
+    print('Predicted: ', ' / '.join(f'{index_to_label[int(predicted[j])]:5s}'
                                   for j in range(4)))
 
     correct = 0
@@ -351,13 +359,18 @@ def image_classifier():
             _, predictions = torch.max(outputs, 1)
             # collect the correct predictions for each class
             for label, prediction in zip(labels, predictions):
+                #print(label, prediction)
                 if label == prediction:
                     correct_pred[classes[label]] += 1
                 total_pred[classes[label]] += 1
 
     # print accuracy for each class
     for classname, correct_count in correct_pred.items():
-        accuracy = 100 * float(correct_count) / total_pred[classname]
+        #print(total_pred)
+        if total_pred[classname] == 0:
+            accuracy = 999
+        else:
+            accuracy = 100 * float(correct_count) / total_pred[classname]
         print(f'Accuracy for class: {classname:5s} is {accuracy:.1f} %')
 
 
