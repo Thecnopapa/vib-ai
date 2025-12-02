@@ -37,7 +37,7 @@ def get_PCA(force=False):
     for file in sorted(os.listdir(file_folder)):
         code = file.split(".")[0]
         structure = bi.biopython.loadPDB(os.path.join(file_folder, f"{code}.cif"))
-        header = bioiain.biopython.imports.read_mmcif(os.path.join(file_folder, file))
+        header = bioiain.biopython.imports.read_mmcif(os.path.join(file_folder, file), subset=["_entity_poly", "_entity"])
         labels = {}
         chains = list(structure.get_chains())
 
@@ -58,7 +58,7 @@ def get_PCA(force=False):
                 #print(chains[0]._id, chains[0].id, chains[0].full_id )
                 #print(strand, chains, strand in chains)
                 if strand in [c.id for c in chains]:
-                    labels[strand] = {"description": header["_entity"][i]["pdbx_description"],
+                    labels[strand] = {"description": header["_entity",i,"pdbx_description"],
                                       "length": [len(list(c.get_residues())) for c in chains if c.id == strand][0],
                                       "chain":list([c for c in chains if c.id == strand])[0]}
 
