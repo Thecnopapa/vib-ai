@@ -113,6 +113,7 @@ def get_PCA(force=False):
             fig.savefig(connected_path)
 
             plt.clf()
+            plt.close()
 
             exp = {
                 "label": label,
