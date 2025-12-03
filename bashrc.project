@@ -21,7 +21,7 @@
 RCFILE=~/.bashrc
 SCRIPT_NAME="bashrc.project"
 CONDA_ENV="default" # =folder name
-RUN_COMMAND="default" # =folder name
+RUN_COMMAND="vibai" # =folder name
 SHELL=bash
 
 BLUE="\[\e[94m\]"
