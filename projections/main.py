@@ -286,6 +286,7 @@ def image_classifier():
     optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
 
     for epoch in range(20):  # loop over the dataset multiple times
+        print("EPOCH: ", epoch)
 
         running_loss = 0.0
         for i, data in enumerate(trainloader, 0):
@@ -306,7 +307,7 @@ def image_classifier():
 
             # print statistics
             running_loss += loss.item()
-            if i % 2000 == 1999:  # print every 2000 mini-batches
+            if i % 1000 == 999:  # print every 1000 mini-batches
                 print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / 2000:.3f}')
                 running_loss = 0.0
 
@@ -371,7 +372,7 @@ def image_classifier():
             accuracy = 999
         else:
             accuracy = 100 * float(correct_count) / total_pred[classname]
-        print(f'Accuracy for class: {classname:5s} is {accuracy:.1f} %')
+            print(f'Accuracy for class: {classname:5s} is {accuracy:.1f} %')
 
 
 if "-l" in sys.argv or "-e" in sys.argv:
