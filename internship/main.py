@@ -252,7 +252,7 @@ if train:
 
     os.makedirs("models", exist_ok=True)
 
-    title = f"{model_name}_{data_folder}_{config["labels"]["selected"]["method"]}_{config['embeddings']['selected']['model']}"
+    title = f"{model_name}_{data_folder}_{config['labels']['selected']['method']}_{config['embeddings']['selected']['model']}"
     classes = config["labels"]["selected"]["classes"]
     print(classes)
     mlp = model_class(input_dim=config["training"]["selected_embedding"]["dimensions"], num_classes=len(classes))
