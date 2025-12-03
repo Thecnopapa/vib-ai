@@ -24,7 +24,7 @@ train = "-t" in sys.argv
 predict = "-p" in sys.argv
 curate = not("--no-curate" in sys.argv)
 terminal = True
-if "--all" in sys.argv:
+if "--all" in sys.argv or "all" in sys.argv:
     run_labels = True
     run_embeddings = True
     train = True
