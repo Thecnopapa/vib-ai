@@ -411,7 +411,7 @@ if predict:
 
         device = config["general"]["device"]
 
-        model_path = f"models/{details["model_name"]}.pth"
+        model_path = f"models/{details['model_name']}.pth"
         model = model_class(input_dim=details["model_info"]["embeddings"]["dimensions"],
                             num_classes=len(details["model_info"]["labels"]["classes"]))
         model.load_state_dict(torch.load(model_path, weights_only=False))
