@@ -2,15 +2,13 @@
 import os, sys, subprocess
 import json
 import numpy as np
-from matplotlib.style.core import available
-from torch.xpu import device
+
 
 import setup
 setup.init()
 from setup import bioiain, bi, config, log_file
 
 from bioiain.biopython.DSSP import index_to_ss
-from embeddings import generate_embeddings
 
 
 
