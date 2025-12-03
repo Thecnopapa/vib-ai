@@ -372,7 +372,7 @@ if predict:
         structure = None
         if details["pdb_code"] is not None:
             download_folder = bi.biopython.downloadPDB("pred", fname, [details["pdb_code"]], file_format="cif")
-            file_path = os.path.join(download_folder, f"{details["pdb_code"]}.cif")
+            file_path = os.path.join(download_folder, f"{details['pdb_code']}.cif")
             structure = bi.biopython.loadPDB(file_path)
         elif details["pdb_path"] is not None:
             if os.path.exists(details["pdb_path"]):

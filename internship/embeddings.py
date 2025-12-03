@@ -138,12 +138,12 @@ def run_saprot(name, mode, foldseek_path, label_path, save_folder):
                 bi.log("warning", "label and foldseek_dict do not match:", ch, len(label_dict[ch]), len(foldsek_dict[ch]))
                 continue
             try:
-                seqs[ch] = [f"{l["resn"].upper()}{f["fs"].lower()}" for l,f in zip(label_dict[ch].values(),foldsek_dict[ch].values())]
+                seqs[ch] = [f"{l['resn'].upper()}{f['fs'].lower()}" for l,f in zip(label_dict[ch].values(),foldsek_dict[ch].values())]
             except:
                 bi.log("warning", "unknown atom in chain:", ch)
-                [bi.log("warning", f"{r["res"]} -> {r["resn"]} / {r["resn3"]}") for r in label_dict[ch].values() if None in [r["res"], r["resn"], r["resn3"]]]
+                [bi.log("warning", f"{r['res']} -> {r['resn']} / {r['resn3']}") for r in label_dict[ch].values() if None in [r["res"], r["resn"], r["resn3"]]]
         elif mode == "seq":
-            seqs[ch] = [f"{l["resn"]}#" for l in label_dict[ch].values()]
+            seqs[ch] = [f"{l['resn']}#" for l in label_dict[ch].values()]
         else:
             bi.log("error", "Unknown SaProt mode:", mode)
     #print("FOLDSEEK", seqs.keys())
