@@ -379,7 +379,7 @@ if predict:
                 file_path = details["pdb_path"]
                 structure = bi.biopython.loadPDB(details["pdb_path"])
             else:
-                bi.log("error", "Provided path does not exist: {}".format(details["pdb_path"]))
+                bi.log("error", "Provided path does not exist: {}".format(details['pdb_path']))
                 exit()
         print(structure)
 
