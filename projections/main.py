@@ -46,14 +46,14 @@ def get_PCA(force=False):
         else:
             poly = header["_entity_poly"]
         for i, entity_poly in enumerate(poly):
-            bi.log(1, i)
+            bi.log(1, i, end=":")
             #print(entity_poly)
             #print(entity_poly["pdbx_strand_id"])
 
 
             for strand in entity_poly["pdbx_strand_id"].split(","):
                 strand = strand.strip()
-                bi.log(2, strand)
+                print(strand, end=" ")
                 #print(chains[0].__dict__.keys())
                 #print(chains[0]._id, chains[0].id, chains[0].full_id )
                 #print(strand, chains, strand in chains)
@@ -62,7 +62,7 @@ def get_PCA(force=False):
                                       "length": [len(list(c.get_residues())) for c in chains if c.id == strand][0],
                                       "chain":list([c for c in chains if c.id == strand])[0]}
 
-        #print(labels)
+        print("")
 
 
 
@@ -71,49 +71,56 @@ def get_PCA(force=False):
 
         for ch, l in labels.items():
             chain = l["chain"]
-            if os.path.exists(f"labels/{code}_{chain.id}.labels.json") and not force:
-                continue
-            #print(l)
-            #print(type(l["chain"]))
-
+            label_path = f"labels/{code}_{chain.id}.labels.json"
             label = l["description"]
-            #print(chain, label)
-            coords = [a.coord for a in chain.get_atoms() if a.id == "CA"]
-            if len(coords) < 10:
-                continue
-            #print(coords[:10])
-            #print(len(coords))
-            pca = PCA(n_components=3)
-            pca.fit(coords)
-            #print(pca.components_)
+            if not (os.path.exists(label_path) and not force):
 
-            projected = pca.transform(coords)
-            #print(projected[0:10])
+                #print(l)
+                #print(type(l["chain"]))
 
-            #print(bi)
-            #from bioiain import visualisation
-            fig = plt.figure(figsize=(1,1))
-            ax = fig.add_subplot(111)
 
-            ax.scatter(projected[:, 0], projected[:, 1], c="black", marker=".")
-            ax.set_aspect("equal")
-            ax.axis('off')
+                #print(chain, label)
+                coords = [a.coord for a in chain.get_atoms() if a.id == "CA"]
+                if len(coords) < 10:
+                    continue
+                #print(coords[:10])
+                #print(len(coords))
+                pca = PCA(n_components=3)
+                pca.fit(coords)
+                #print(pca.components_)
 
-            os.makedirs("imgs/projected", exist_ok=True)
-            os.makedirs("imgs/connected", exist_ok=True)
-            os.makedirs("labels", exist_ok=True)
+                projected = pca.transform(coords)
+                #print(projected[0:10])
+
+                #print(bi)
+                #from bioiain import visualisation
+
 
             projected_path = f"imgs/projected/{code}_{chain.id}.png"
             connected_path = f"imgs/connected/{code}_{chain.id}.png"
 
-            fig.savefig(projected_path)
+            if not (os.path.exists(projected_path) and os.path.exists(projected_path) and not force):
+                fig = plt.figure(figsize=(1,1))
+                ax = fig.add_subplot(111)
 
-            for i in range(len(projected)-1):
-                ax.plot(projected[i:i+2, 0], projected[i:i+2, 1], color="#00000050")
-            fig.savefig(connected_path)
+                ax.scatter(projected[:, 0], projected[:, 1], c="black", marker=".")
+                ax.set_aspect("equal")
+                ax.axis('off')
 
-            plt.clf()
-            plt.close()
+                os.makedirs("imgs/projected", exist_ok=True)
+                os.makedirs("imgs/connected", exist_ok=True)
+                os.makedirs("labels", exist_ok=True)
+
+
+
+                fig.savefig(projected_path)
+
+                for i in range(len(projected)-1):
+                    ax.plot(projected[i:i+2, 0], projected[i:i+2, 1], color="#00000050")
+                fig.savefig(connected_path)
+
+                plt.clf()
+                plt.close()
 
             exp = {
                 "label": label,
@@ -124,7 +131,7 @@ def get_PCA(force=False):
                     "projected": projected_path
                 }
             }
-            json.dump(exp, open(f"labels/{code}_{chain.id}.labels.json", "w"), indent=4)
+            json.dump(exp, open(label_path, "w"), indent=4)
 
 
 import torch
