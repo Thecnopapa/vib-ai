@@ -2,6 +2,72 @@ import os, sys, json
 import numpy as np
 
 
+from bioiain.utilities import str_to_list_with_literals
+
+
+def get_family_desc(fam):
+    with open(fam_list_names_file) as ff:
+        for line in ff:
+            if line[0] == "#":
+                continue
+            line = str_to_list_with_literals(line.expandtabs())
+            print(line)
+            if line[0] != fam:
+                continue
+            return " ".join(line[3:])
+
+def parse_cath(code, chain, domain=None, cath_folder="/home/iain/downloads/orengoftp.biochem.ucl.ac.uk/cath/releases/latest-release/cath-classification-data/"):
+
+    dom_list_file = os.path.join(cath_folder, "cath-domain-list.txt")
+    fam_list_names_file = os.path.join(cath_folder, "cath-superfamily-list.txt")
+
+
+
+    with open(dom_list_file) as f:
+        for line in f:
+            if line[0] == "#":
+                continue
+            if line[:4].upper() != code.upper():
+                continue
+
+            comps = str_to_list_with_literals(line)
+            c = comps[0][:4]
+            ch = comps[0][4:5]
+            dom = comps[0][5:7]
+
+            if code.upper() != c.upper():
+                continue
+
+            if chain.upper() != ch.upper():
+                continue
+
+            if domain != None:
+                if int(domain) != int(dom):
+                    continue
+
+            info = dict(
+                dom_name = comps[0],
+                class_number = comps[1],
+                arch_number = comps[2],
+                top_number = comps[3],
+                hom_fam_number = comps[4],
+                s35 = comps[5],
+                s60 = comps[6],
+                s95 = comps[7],
+                s100 = comps[8],
+                s100_count = comps[9],
+                dom_len = comps[10],
+                res = comps[11]
+            )
+            superfamily = f"{info['class_number']}.{info['arch_number']}.{info['top_number']}.{info['hom_fam_number']}"
+            info["superfamily"] = superfamily
+            description = get_family_desc(superfamily)
+            info["description"] = description
+            #print(json.dumps(info))
+            return info
+        return None
+
+
 
 def import_bi():
     global bi
@@ -28,41 +94,57 @@ import_bi()
 
 
 
-def get_PCA(force=False):
+def get_PCA(force=True):
     from sklearn.decomposition import PCA
-    import plotly.graph_objs as go
+    sys.path.append(".")
     import matplotlib.pyplot as plt
-    file_folder = bi.biopython.downloadPDB("../internship/data", "mega-batch", file_path="../internship/data/mega-batch20K.txt", file_format="cif", overwrite=False)
+    #file_folder = bi.biopython.downloadPDB("../internship/data", "mega-batch", file_path="../internship/data/mega-batch20K.txt", file_format="cif", overwrite=False)
+    file_folder = bi.biopython.downloadPDB("../internship/data", "receptors", file_path="../internship/data/receptors.txt", file_format="cif", overwrite=False)
 
     for file in sorted(os.listdir(file_folder)):
         code = file.split(".")[0]
         structure = bi.biopython.loadPDB(os.path.join(file_folder, f"{code}.cif"))
-        header = bioiain.biopython.imports.read_mmcif(os.path.join(file_folder, file), subset=["_entity_poly", "_entity"])
         labels = {}
         chains = list(structure.get_chains())
+        if False:
+            header = bioiain.biopython.imports.read_mmcif(os.path.join(file_folder, file), subset=["_entity_poly", "_entity"])
 
-        if type(header["_entity_poly"]) is dict:
-            poly = [header["_entity_poly"]]
+
+            if type(header["_entity_poly"]) is dict:
+                poly = [header["_entity_poly"]]
+            else:
+                poly = header["_entity_poly"]
+            for i, entity_poly in enumerate(poly):
+                bi.log(1, i, end=":")
+                #print(entity_poly)
+                #print(entity_poly["pdbx_strand_id"])
+
+
+                for strand in entity_poly["pdbx_strand_id"].split(","):
+                    strand = strand.strip()
+                    print(strand, end=" ")
+                    #print(chains[0].__dict__.keys())
+                    #print(chains[0]._id, chains[0].id, chains[0].full_id )
+                    #print(strand, chains, strand in chains)
+                    if strand in [c.id for c in chains]:
+                        labels[strand] = {"description": header["_entity",i,"pdbx_description"],
+                                          "length": [len(list(c.get_residues())) for c in chains if c.id == strand][0],
+                                          "chain":list([c for c in chains if c.id == strand])[0],
+                                          "cath": parse_cath(code, strand)}
+
+            print("")
         else:
-            poly = header["_entity_poly"]
-        for i, entity_poly in enumerate(poly):
-            bi.log(1, i, end=":")
-            #print(entity_poly)
-            #print(entity_poly["pdbx_strand_id"])
-
-
-            for strand in entity_poly["pdbx_strand_id"].split(","):
-                strand = strand.strip()
-                print(strand, end=" ")
-                #print(chains[0].__dict__.keys())
-                #print(chains[0]._id, chains[0].id, chains[0].full_id )
-                #print(strand, chains, strand in chains)
-                if strand in [c.id for c in chains]:
-                    labels[strand] = {"description": header["_entity",i,"pdbx_description"],
-                                      "length": [len(list(c.get_residues())) for c in chains if c.id == strand][0],
-                                      "chain":list([c for c in chains if c.id == strand])[0]}
-
-        print("")
+            print(structure, end=": ")
+            for chain in chains:
+                print(chain, end=" ")
+                cath = parse_cath(code, chain.id)
+                if cath is not None:
+                    labels[chain.id] = {
+                        "chain": chain,
+                        "cath": cath,
+                        "label": f"{cath['class_number']}.{cath['arch_number']}.{cath['top_number']}.{cath['hom_fam_number']}"
+                    }
+            print("")
 
 
 
@@ -72,7 +154,7 @@ def get_PCA(force=False):
         for ch, l in labels.items():
             chain = l["chain"]
             label_path = f"labels/{code}_{chain.id}.labels.json"
-            label = l["description"]
+            label = l["label"]
             if not (os.path.exists(label_path) and not force):
 
                 #print(l)
@@ -123,6 +205,7 @@ def get_PCA(force=False):
                 plt.close()
 
             exp = {
+                "cath": l["cath"],
                 "label": label,
                 "file": file,
                 "chain": chain.id,
@@ -160,8 +243,10 @@ def image_classifier():
         name = file.split(".")[0]
         l_path = os.path.join("labels", f"{name}.labels.json")
         if os.path.exists(l_path):
-            labs.append(json.load(open(l_path))["label"].lower().strip())
+            labs.append(json.load(open(l_path))["label"])
             structure_list.append(name)
+    [print(">", l, labs.count(l)) for l in set(labs)]
+
     labs = list(set(labs))
     for n, l in enumerate(labs):
         label_to_index[l] = n
