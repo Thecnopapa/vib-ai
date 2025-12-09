@@ -229,6 +229,9 @@ projections/exports
 projections/labels
 projections/headers
 
+pisa/*.xml
+pisa/*.cif
+
 
 config.custom.json
 
