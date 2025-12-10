@@ -231,7 +231,7 @@ projections/headers
 
 pisa/*.xml
 pisa/*.cif
-
+pisa/pisa_raw
 
 config.custom.json
 
