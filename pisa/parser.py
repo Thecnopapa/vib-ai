@@ -36,6 +36,7 @@ def parse_pisa(pisa_id, folder="pisa_raw", name=None):
     assert os.path.isfile(interactions_path)
     data = {}
     interfaces = {}
+    molecules = {}
     with open(interactions_path) as f:
         xml = xmltodict.parse(f.read())["pdb_entry"]
         if xml["status"] != "Ok":
@@ -52,35 +53,83 @@ def parse_pisa(pisa_id, folder="pisa_raw", name=None):
             for molecule in interface["molecule"]:
                 i["molecules"][molecule["id"]] = {
                     "info": {k:v for k,v in molecule.items() if type(v) not in [list, dict]},
-                    "residues": {}
                 }
-                m = i["molecules"][molecule["id"]]
+                if molecule["chain_id"] not in molecules:
+                    molecules[molecule["chain_id"]] = {
+                        "id": molecule["id"],
+                        "chain_id": molecule["chain_id"],
+                        "class": molecule["class"],
+                        "residues": {}
+                    }
+                m = molecules[molecule["chain_id"]]
                 for n, residue in enumerate(molecule["residues"]["residue"]):
                     if type(residue) == str:
                         continue
-                    m["residues"][n] = {k:v for k,v in residue.items() if type(v) not in [list, dict]}
+                    print(residue)
+                    if residue["ser_no"] not in m["residues"]:
+                        m["residues"][residue["ser_no"]] = {
+                            "ser_no": residue["ser_no"],
+                            "name": residue["name"],
+                            "seq_num": residue["seq_num"],
+                            "label_seq_num": residue["label_seq_num"],
+                            "interactions": {}
+                            }
+                    solv_en = float(residue["solv_en"])
+                    if  solv_en != 0:
+                        m["residues"][residue["ser_no"]]["interactions"][interface["id"]] = {
+                            "asa": float(residue["asa"]),
+                            "bsa": float(residue["bsa"]),
+                            "solv_en": solv_en,
+                        }
         data["interfaces"] = interfaces
+        data["molecules"] = molecules
 
     assemblies = {}
     with open(assemblies_path) as f:
         xml = xmltodict.parse(f.read())["pisa_results"]
         if xml["status"] != "Ok":
-            raise Exception(f"Interaction XML error: {xml}")
+            raise Exception(f"Assembly XML error: {xml}")
         data["pisa_id"] = xml["name"]
         data["multimeric_state"] = xml["multimeric_state"]
         data["assessment"] = xml["assessment"]
-        data["n_assemblies"] = xml["total_asm"]
+        data["n_assembly_groups"] = xml["total_asm"]
+        xml = xml["asm_set"]
+        if type(xml) != list:
+            xml = [xml]
+        for assembly_group in xml:
+            assembly_serial = assembly_group["ser_no"]
+            print(">>>> serial group:", assembly_serial)
+            #print(assembly_group["assembly"]["serial_no"])
+            if type(assembly_group["assembly"]) == dict:
+                asss = [assembly_group["assembly"]]
+            elif type(assembly_group["assembly"]) == list:
+                asss = assembly_group["assembly"]
+            else:
+                raise Exception(f"Assembly group XML error: {assembly_group['assembly']}")
+            #print_children(assembly_group["assembly"])
+            for assembly in asss:
+                print(">>>> assembly:", assembly["serial_no"])
+                print_children(assembly)
+                assemblies[assembly["serial_no"]] = {
+                    "info": {k:v for k,v in assembly.items() if type(v) not in [list, dict]},
+                    "assembly_group": assembly_serial,
+                    "interfaces": {}
+                }
+                a = assemblies[assembly["serial_no"]]
+                a["info"]["n_interfaces"] = int(assembly["interfaces"]["n_interfaces"])
+                #print(json.dumps(assemblies[assembly["serial_no"]], indent=4))
+                if a["info"]["n_interfaces"] > 0:
+                    #print_children(assembly["interfaces"]["interface"])
+                    inters = assembly["interfaces"]["interface"]
+                    if type(inters) != list:
+                        inters = [inters]
+                    for interface in inters:
+                        #a["interfaces"][interface["id"]] = {"info": {k:v for k,v in assembly.items() if type(v) not in [list, dict]}}
+                        a["interfaces"][interface["id"]] = {"id": interface["id"], "dissociates": interface["dissociates"]}
 
-
-        print_children(xml)
-
-
-
-
-
-
-
-    #print(json.dumps(data, indent=4))
+        data["assemblies"] = assemblies
+    print(json.dumps(data["assemblies"], indent=4))
+    json.dump(data, open("out.json", "w"), indent=4)
     #print_children(data)
 
 
