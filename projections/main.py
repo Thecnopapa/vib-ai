@@ -16,7 +16,7 @@ def get_family_desc(fam):
                 continue
             return " ".join(line[3:])
 
-def parse_cath(code, chain, domain=None, cath_folder="/home/iain/downloads/orengoftp.biochem.ucl.ac.uk/cath/releases/latest-release/cath-classification-data/"):
+def parse_cath(code, chain, domain=None, cath_folder="cath"):
 
     dom_list_file = os.path.join(cath_folder, "cath-domain-list.txt")
     fam_list_names_file = os.path.join(cath_folder, "cath-superfamily-list.txt")
