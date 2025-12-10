@@ -208,13 +208,15 @@ close(){
 }
 
 
-
+count(){
+  ls -1 $1 | wc -l
+}
 
 test(){
   cd $FOLDER_PATH/test && python test.py "$@"
 }
 
 
-count(){
+clock(){
   cloc --include-lang=Python --by-file-by-lang .
 }
