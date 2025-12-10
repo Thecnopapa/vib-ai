@@ -99,8 +99,10 @@ def get_PCA(force=True):
     from sklearn.decomposition import PCA
     sys.path.append(".")
     import matplotlib.pyplot as plt
-    #file_folder = bi.biopython.downloadPDB("../internship/data", "mega-batch", file_path="../internship/data/mega-batch20K.txt", file_format="cif", overwrite=False)
-    file_folder = bi.biopython.downloadPDB("../internship/data", "receptors", file_path="../internship/data/receptors.txt", file_format="cif", overwrite=False)
+    if "mega" in sys.argv:
+        file_folder = bi.biopython.downloadPDB("../internship/data", "mega-batch", file_path="../internship/data/mega-batch20K.txt", file_format="cif", overwrite=False)
+    else:
+        file_folder = bi.biopython.downloadPDB("../internship/data", "receptors", file_path="../internship/data/receptors.txt", file_format="cif", overwrite=False)
 
     for file in sorted(os.listdir(file_folder)):
         code = file.split(".")[0]
@@ -156,7 +158,7 @@ def get_PCA(force=True):
             chain = l["chain"]
             label_path = f"labels/{code}_{chain.id}.labels.json"
             label = l["label"]
-            if not (os.path.exists(label_path) and not force):
+            if (not os.path.exists(label_path)) or force:
 
                 #print(l)
                 #print(type(l["chain"]))
