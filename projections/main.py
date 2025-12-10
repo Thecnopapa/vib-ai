@@ -12,7 +12,7 @@ def get_family_desc(fam, cath_folder="cath"):
             if line[0] == "#":
                 continue
             line = str_to_list_with_literals(line.expandtabs())
-            print(line)
+            #print(line)
             if line[0] != fam:
                 continue
             return " ".join(line[3:])
@@ -106,6 +106,7 @@ def get_PCA(force=True):
 
     for file in sorted(os.listdir(file_folder)):
         code = file.split(".")[0]
+        #print(code)
         structure = bi.biopython.loadPDB(os.path.join(file_folder, f"{code}.cif"))
         labels = {}
         chains = list(structure.get_chains())
@@ -139,14 +140,16 @@ def get_PCA(force=True):
         else:
             print(structure, end=": ")
             for chain in chains:
-                print(chain, end=" ")
+                l = None
                 cath = parse_cath(code, chain.id)
                 if cath is not None:
+                    l = f"{cath['class_number']}.{cath['arch_number']}.{cath['top_number']}.{cath['hom_fam_number']}"
                     labels[chain.id] = {
                         "chain": chain,
                         "cath": cath,
-                        "label": f"{cath['class_number']}.{cath['arch_number']}.{cath['top_number']}.{cath['hom_fam_number']}"
+                        "label": l
                     }
+                print(f"{chain}:{l}", end=" ")
             print("")
 
 
