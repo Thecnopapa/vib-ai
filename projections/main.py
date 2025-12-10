@@ -5,7 +5,8 @@ import numpy as np
 from bioiain.utilities import str_to_list_with_literals
 
 
-def get_family_desc(fam):
+def get_family_desc(fam, cath_folder="cath"):
+    fam_list_names_file = os.path.join(cath_folder, "cath-superfamily-list.txt")
     with open(fam_list_names_file) as ff:
         for line in ff:
             if line[0] == "#":
@@ -19,7 +20,7 @@ def get_family_desc(fam):
 def parse_cath(code, chain, domain=None, cath_folder="cath"):
 
     dom_list_file = os.path.join(cath_folder, "cath-domain-list.txt")
-    fam_list_names_file = os.path.join(cath_folder, "cath-superfamily-list.txt")
+
 
 
 
