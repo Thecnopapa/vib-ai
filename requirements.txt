@@ -22,4 +22,4 @@ pillow
 xmltodict
 
 --extra-index-url=https://test.pypi.org/simple/
-bioiain >= 0.0.6.2
+bioiain >= 0.0.6.4

@@ -21,6 +21,7 @@ def generate_labels(name, structure=None):
     method = config["labels"]["selected"]["method"]
     if method== "dssp":
         bi.log(3, "Selected method: DSSP")
+        from bioiain.tools import run_dssp
         try:
             bi.log(3, "DSSP command:", config["general"]["dssp"])
         except:
@@ -32,7 +33,8 @@ def generate_labels(name, structure=None):
                  config["labels"]["selected"]["save_folder"],
                  config["labels"]["selected"]["raw_folder"],
                  config["labels"]["selected"]["abbreviation"],
-                        structure=structure)
+                        force = config["general"]["force"],
+                        dssp_command=config["general"]["dssp"])
 
     elif method == "sasa":
         bi.log(3, "Selected method: SASA")

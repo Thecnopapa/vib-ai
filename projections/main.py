@@ -95,7 +95,7 @@ import_bi()
 
 
 
-def get_PCA(force=True):
+def get_PCA(force=False):
     from sklearn.decomposition import PCA
     sys.path.append(".")
     import matplotlib.pyplot as plt
@@ -186,6 +186,7 @@ def get_PCA(force=True):
 
             projected_path = f"imgs/projected/{code}_{chain.id}.png"
             connected_path = f"imgs/connected/{code}_{chain.id}.png"
+            lines_path = f"imgs/lines/{code}_{chain.id}.png"
 
             if not (os.path.exists(projected_path) and os.path.exists(projected_path) and not force):
                 fig = plt.figure(figsize=(1,1))
@@ -197,6 +198,7 @@ def get_PCA(force=True):
 
                 os.makedirs("imgs/projected", exist_ok=True)
                 os.makedirs("imgs/connected", exist_ok=True)
+                os.makedirs("imgs/lines", exist_ok=True)
                 os.makedirs("labels", exist_ok=True)
 
 
@@ -208,6 +210,13 @@ def get_PCA(force=True):
                 fig.savefig(connected_path)
 
                 plt.clf()
+                fig = plt.figure(figsize=(1, 1))
+                ax = fig.add_subplot(111)
+                ax.set_aspect("equal")
+                ax.axis('off')
+                for i in range(len(projected)-1):
+                    ax.plot(projected[i:i+2, 0], projected[i:i+2, 1], color="black")
+                fig.savefig(lines_path)
                 plt.close()
 
             exp = {
@@ -217,7 +226,8 @@ def get_PCA(force=True):
                 "chain": chain.id,
                 "paths": {
                     "connected": connected_path,
-                    "projected": projected_path
+                    "projected": projected_path,
+                    "lines": lines_path,
                 }
             }
             json.dump(exp, open(label_path, "w"), indent=4)
@@ -313,6 +323,12 @@ def image_classifier():
 
     train_list, test_list = train_test_split(structure_list, test_size=0.2, random_state=42)
 
+    img_folder = "imgs/connected"
+    if "-dots" in sys.argv:
+        img_folder = "imgs/projected"
+    if "-lines" in sys.argv:
+        img_folder = "imgs/lines"
+    print("IMG_FOLDER:", img_folder)
 
     #trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=transform)
     trainset = ImageDataset(train_list, folder="imgs/connected", label_folder="labels")
@@ -347,13 +363,13 @@ def image_classifier():
     #     t.append([trainset[i]])
     #
     # images, labels = zip([[z[0], z[1]] for z in t])
-    dataiter = iter(trainloader)
-    images, labels = next(dataiter)
+    #dataiter = iter(trainloader)
+    #images, labels = next(dataiter)
 
     # show images
-    imshow(torchvision.utils.make_grid(images))
+    #imshow(torchvision.utils.make_grid(images))
     # print labels
-    print(' '.join(f'{classes[labels[j]]:5s}' for j in range(batch_size)))
+    #print(' '.join(f'{classes[labels[j]]:5s}' for j in range(batch_size)))
 
     import torch.nn as nn
     import torch.nn.functional as F
@@ -419,8 +435,8 @@ def image_classifier():
     images, labels = next(dataiter)
 
     # print images
-    imshow(torchvision.utils.make_grid(images))
-    print('GroundTruth: ', ' '.join(f'{index_to_label[int(labels[j])]:5s}' for j in range(4)))
+    #imshow(torchvision.utils.make_grid(images))
+    #print('GroundTruth: ', ' '.join(f'{index_to_label[int(labels[j])]:5s}' for j in range(4)))
 
     net = Net(n_features = len(labs))
     net.load_state_dict(torch.load(PATH, weights_only=True))
@@ -429,8 +445,8 @@ def image_classifier():
 
     _, predicted = torch.max(outputs, 1)
 
-    print('Predicted: ', ' / '.join(f'{index_to_label[int(predicted[j])]:5s}'
-                                  for j in range(4)))
+    #print('Predicted: ', ' / '.join(f'{index_to_label[int(predicted[j])]:5s}'
+    #                              for j in range(4)))
 
     correct = 0
     total = 0
@@ -465,17 +481,17 @@ def image_classifier():
                 total_pred[classes[label]] += 1
 
     # print accuracy for each class
-    for classname, correct_count in correct_pred.items():
+    for classname, correct_count in sorted([(k,v) for k, v in correct_pred.items()], key=lambda x: x[1], reverse=True):
         #print(total_pred)
         if total_pred[classname] == 0:
             accuracy = 999
         else:
             accuracy = 100 * float(correct_count) / total_pred[classname]
-            print(f'Accuracy for class: {classname:5s} is {accuracy:.1f} %')
+            print(f'Accuracy for class: {classname:5s} is \t{accuracy:.1f}%\tcorrect: {correct_count}/{total_pred[classname]}\ttitle: {get_family_desc(classname)}')
 
 
 if "-l" in sys.argv or "-e" in sys.argv:
-    get_PCA()
+    get_PCA("-f" in sys.argv)
 if "-t" in sys.argv:
     image_classifier()
 
