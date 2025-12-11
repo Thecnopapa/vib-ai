@@ -1,5 +1,6 @@
 import os, sys, json
 import numpy as np
+import pandas as pd
 
 
 from bioiain.utilities import str_to_list_with_literals
@@ -261,7 +262,7 @@ def image_classifier():
         if os.path.exists(l_path):
             labs.append(json.load(open(l_path))["label"])
             structure_list.append(name)
-    [print(">", l, labs.count(l)) for l in set(labs)]
+    n_labs = {l: labs.count(l) for l in set(labs)}
 
     labs = list(set(labs))
     for n, l in enumerate(labs):
@@ -338,8 +339,6 @@ def image_classifier():
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=0)
     testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=True, num_workers=0)
 
-    print(trainset)
-    print(trainloader)
 
     classes = labs
 
@@ -399,9 +398,9 @@ def image_classifier():
 
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
-
-    for epoch in range(20):  # loop over the dataset multiple times
-        print("EPOCH: ", epoch)
+    epochs = 20
+    for epoch in range(epochs):  # loop over the dataset multiple times
+        print("EPOCH: ", epoch, end="\r")
 
         running_loss = 0.0
         for i, data in enumerate(trainloader, 0):
@@ -423,10 +422,10 @@ def image_classifier():
             # print statistics
             running_loss += loss.item()
             if i % 1000 == 999:  # print every 1000 mini-batches
-                print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / 2000:.3f}')
+                print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / 2000:.3f}', end = "\r")
                 running_loss = 0.0
 
-    print('Finished Training')
+    print('Finished Training ({} epochs)'.format(epochs))
 
     PATH = './cifar_net.pth'
     torch.save(net.state_dict(), PATH)
@@ -461,7 +460,7 @@ def image_classifier():
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
 
-    print(f'Accuracy of the network on the 10000 test images: {100 * correct // total} %')
+    print(f'Accuracy of {len(testset)}/{len(trainset)} test images: {100 * correct // total} %')
 
     # prepare to count predictions for each class
     correct_pred = {classname: 0 for classname in classes}
@@ -481,14 +480,53 @@ def image_classifier():
                 total_pred[classes[label]] += 1
 
     # print accuracy for each class
-    for classname, correct_count in sorted([(k,v) for k, v in correct_pred.items()], key=lambda x: x[1], reverse=True):
+
+
+
+
+    if "mega" in sys.argv:
+        run_name = "mega"
+    else:
+        run_name = "rcps"
+    if "-dots" in sys.argv:
+        run_name += "-dots"
+    elif "-lines" in sys.argv:
+        run_name += "-lines"
+    else:
+        run_name += "-all"
+
+    columns = [
+        run_name + "_accuracy",
+        run_name + "_correct",
+        run_name + "_total",
+        run_name + "_in_data",
+    ]
+
+
+
+    os.makedirs("dataframes", exist_ok=True)
+    df_path = f"dataframes/results.csv"
+    if os.path.exists(df_path):
+        df = pd.read_csv(df_path)
+        for col in columns:
+            if col not in df.columns:
+                df.insert(len(df.columns), col, [None]*len(df))
+    else:
+        columns = ["cath", "name"] + columns
+        df = pd.DataFrame(columns=columns)
+
+    print(df)
+    df.to_csv(df_path, index=False)
+
+
+    for classname, correct_count in sorted([(k,v) for k, v in correct_pred.items()], key=lambda x: n_labs[x[0]], reverse=True):
         #print(total_pred)
+
         if total_pred[classname] == 0:
             accuracy = 999
         else:
             accuracy = 100 * float(correct_count) / total_pred[classname]
-            print(f'Accuracy for class: {classname:5s} is \t{accuracy:.1f}%\tcorrect: {correct_count}/{total_pred[classname]}\ttitle: {get_family_desc(classname)}')
-
+            print(f'Accuracy for class: {classname:5s}: \t{accuracy:.1f}%\tcorrect: {correct_count}/{total_pred[classname]}\tin data: {n_labs[classname]}\ttitle: {get_family_desc(classname)}')
 
 if "-l" in sys.argv or "-e" in sys.argv:
     get_PCA("-f" in sys.argv)
