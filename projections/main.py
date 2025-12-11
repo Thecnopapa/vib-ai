@@ -211,6 +211,7 @@ def get_PCA(force=False):
                 fig.savefig(connected_path)
 
                 plt.clf()
+                plt.close()
                 fig = plt.figure(figsize=(1, 1))
                 ax = fig.add_subplot(111)
                 ax.set_aspect("equal")
@@ -218,6 +219,7 @@ def get_PCA(force=False):
                 for i in range(len(projected)-1):
                     ax.plot(projected[i:i+2, 0], projected[i:i+2, 1], color="black")
                 fig.savefig(lines_path)
+                plt.clf()
                 plt.close()
 
             exp = {
