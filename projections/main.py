@@ -517,6 +517,8 @@ def image_classifier():
         columns = ["cath", "name"] + columns
         df = pd.DataFrame(columns=columns)
 
+    df.set_index("cath", inplace=True, drop=False)
+
     print(df)
     df.to_csv(df_path, index=False)
 
@@ -528,7 +530,27 @@ def image_classifier():
             accuracy = 999
         else:
             accuracy = 100 * float(correct_count) / total_pred[classname]
-            print(f'Accuracy for class: {classname:5s}: \t{accuracy:.1f}%\tcorrect: {correct_count}/{total_pred[classname]}\tin data: {n_labs[classname]}\ttitle: {get_family_desc(classname)}')
+            title = get_family_desc(classname)
+            print(f'Accuracy for class: {classname:5s}: \t{accuracy:.1f}%\tcorrect: {correct_count}/{total_pred[classname]}\tin data: {n_labs[classname]}\ttitle: {title}')
+
+
+
+            if classname in df.index:
+                df.loc[classname, run_name + "_accuracy"] = accuracy
+                df.loc[classname, run_name + "_correct"] = correct_count
+                df.loc[classname, run_name + "_total"] = total_pred[classname]
+                df.loc[classname, run_name + "_in_data"] = n_labs[classname]
+            else:
+                df.loc[classname] = {
+                    "name": title,
+                    "cath": classname,
+                    run_name + "_accuracy": accuracy,
+                    run_name + "_correct": correct_count,
+                    run_name + "_total": total_pred[classname],
+                    run_name + "_in_data": n_labs[classname],
+                }
+    df.to_csv(df_path, index=False)
+
 
 if "-l" in sys.argv or "-e" in sys.argv:
     get_PCA("-f" in sys.argv)
