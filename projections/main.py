@@ -1,7 +1,7 @@
 import os, sys, json
 import numpy as np
 import pandas as pd
-
+import matplotlib.pyplot as plt
 
 from bioiain.utilities import str_to_list_with_literals
 
@@ -246,7 +246,7 @@ from sklearn.model_selection import train_test_split
 
 
 
-def image_classifier():
+def image_classifier(mode="connected"):
 
     transform = transforms.Compose(
         [transforms.ToTensor(),
@@ -323,7 +323,7 @@ def image_classifier():
 
     print(len(structure_list))
     print(labs)
-
+    np.random.seed(6)
     train_list, test_list = train_test_split(structure_list, test_size=0.2, random_state=42)
 
     img_folder = "imgs/connected"
@@ -344,8 +344,7 @@ def image_classifier():
 
     classes = labs
 
-    import matplotlib.pyplot as plt
-    import numpy as np
+
 
     # functions to show an image
 
@@ -555,7 +554,16 @@ def image_classifier():
 if "-l" in sys.argv or "-e" in sys.argv:
     get_PCA("-f" in sys.argv)
 if "-t" in sys.argv:
-    image_classifier()
+    if "-all" in sys.argv:
+        image_classifier(mode="connected")
+        image_classifier(mode="projected")
+        image_classifier(mode="lines")
+    elif "-lines" in sys.argv:
+        image_classifier(mode="lines")
+    elif "-dots" in sys.argv:
+        image_classifier(mode="projected")
+    else:
+        image_classifier(mode="connected")
 
 
 
