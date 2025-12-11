@@ -1,4 +1,5 @@
 import os, sys, json
+import warnings
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -522,6 +523,7 @@ def image_classifier(mode="connected"):
         #print(total_pred)
         df.sort_index(level="cath", inplace=True)
         title = get_family_desc(classname)
+        warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
 
         df.loc[(classname, dataset, mode), "cath"] = classname
         df.loc[(classname, dataset, mode), "title"] = title
@@ -540,6 +542,7 @@ def image_classifier(mode="connected"):
             df.loc[(classname, dataset, mode), "total"] = total_pred[classname]
 
         df.loc[(classname, dataset, mode), "accuracy"] = accuracy
+        warnings.simplefilter(action='default', category=pd.errors.PerformanceWarning)
         df.sort_index(level="cath", inplace=True)
 
     df.sort_index(level="cath", inplace=True)
