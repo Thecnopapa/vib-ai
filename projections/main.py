@@ -321,21 +321,20 @@ def image_classifier(mode="connected"):
 
     batch_size = 4
 
-    print(len(structure_list))
+    print("N chains:", len(structure_list))
+    print("N labs:", len(labs))
     print(labs)
     np.random.seed(6)
     train_list, test_list = train_test_split(structure_list, test_size=0.2, random_state=42)
 
-    img_folder = "imgs/connected"
-    if "-dots" in sys.argv:
-        img_folder = "imgs/projected"
-    if "-lines" in sys.argv:
-        img_folder = "imgs/lines"
+
+    img_folder = f"imgs/{mode}"
+    assert os.path.exists(img_folder)
     print("IMG_FOLDER:", img_folder)
 
     #trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=transform)
-    trainset = ImageDataset(train_list, folder="imgs/connected", label_folder="labels")
-    testset = ImageDataset(test_list, folder="imgs/connected", label_folder="labels")
+    trainset = ImageDataset(train_list, folder=img_folder, label_folder="labels")
+    testset = ImageDataset(test_list, folder=img_folder, label_folder="labels")
 
 
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=0)
@@ -428,7 +427,7 @@ def image_classifier(mode="connected"):
 
     print('Finished Training ({} epochs)'.format(epochs))
 
-    PATH = './cifar_net.pth'
+    PATH = f'./cifar_net_{mode}.pth'
     torch.save(net.state_dict(), PATH)
 
     dataiter = iter(testloader)
@@ -486,21 +485,16 @@ def image_classifier(mode="connected"):
 
 
     if "mega" in sys.argv:
-        run_name = "mega"
+        dataset = "mega"
     else:
-        run_name = "rcps"
-    if "-dots" in sys.argv:
-        run_name += "-dots"
-    elif "-lines" in sys.argv:
-        run_name += "-lines"
-    else:
-        run_name += "-all"
+        dataset = "rcps"
+
 
     columns = [
-        run_name + "_accuracy",
-        run_name + "_correct",
-        run_name + "_total",
-        run_name + "_in_data",
+        "accuracy",
+        "correct",
+        "total",
+        "n_samples",
     ]
 
 
@@ -513,42 +507,44 @@ def image_classifier(mode="connected"):
             if col not in df.columns:
                 df.insert(len(df.columns), col, [None]*len(df))
     else:
-        columns = ["cath", "name"] + columns
+        columns = ["title", "cath",  "dataset", "mode"] + columns
         df = pd.DataFrame(columns=columns)
 
-    df.set_index("cath", inplace=True, drop=False)
+
+    df.set_index(["cath", "dataset", "mode"], inplace=True, drop=False)
+    df.sort_index(level="cath", inplace=True)
 
     print(df)
-    df.to_csv(df_path, index=False)
+    print("LEXSORTED:", df.index.is_monotonic_increasing, )
 
 
     for classname, correct_count in sorted([(k,v) for k, v in correct_pred.items()], key=lambda x: n_labs[x[0]], reverse=True):
         #print(total_pred)
+        df.sort_index(level="cath", inplace=True)
+        title = get_family_desc(classname)
+
+        df.loc[(classname, dataset, mode), "cath"] = classname
+        df.loc[(classname, dataset, mode), "title"] = title
+        df.loc[(classname, dataset, mode), "dataset"] = dataset
+        df.loc[(classname, dataset, mode), "mode"] = mode
+
+        df.loc[(classname, dataset, mode), "n_samples"] = n_labs[classname]
 
         if total_pred[classname] == 0:
-            accuracy = 999
+            accuracy = None
         else:
             accuracy = 100 * float(correct_count) / total_pred[classname]
-            title = get_family_desc(classname)
             print(f'Accuracy for class: {classname:5s}: \t{accuracy:.1f}%\tcorrect: {correct_count}/{total_pred[classname]}\tin data: {n_labs[classname]}\ttitle: {title}')
 
+            df.loc[(classname, dataset, mode), "correct"] = correct_count
+            df.loc[(classname, dataset, mode), "total"] = total_pred[classname]
 
+        df.loc[(classname, dataset, mode), "accuracy"] = accuracy
+        df.sort_index(level="cath", inplace=True)
 
-            if classname in df.index:
-                df.loc[classname, run_name + "_accuracy"] = accuracy
-                df.loc[classname, run_name + "_correct"] = correct_count
-                df.loc[classname, run_name + "_total"] = total_pred[classname]
-                df.loc[classname, run_name + "_in_data"] = n_labs[classname]
-            else:
-                df.loc[classname] = {
-                    "name": title,
-                    "cath": classname,
-                    run_name + "_accuracy": accuracy,
-                    run_name + "_correct": correct_count,
-                    run_name + "_total": total_pred[classname],
-                    run_name + "_in_data": n_labs[classname],
-                }
+    df.sort_index(level="cath", inplace=True)
     df.to_csv(df_path, index=False)
+
 
 
 if "-l" in sys.argv or "-e" in sys.argv:
