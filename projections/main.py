@@ -193,7 +193,7 @@ def get_PCA(force=False):
                 fig = plt.figure(figsize=(1,1))
                 ax = fig.add_subplot(111)
 
-                ax.scatter(projected[:, 0], projected[:, 1], c="black", marker=".")
+                ax.scatter(projected[:, 0], projected[:, 1], c="#00000050", marker=".")
                 ax.set_aspect("equal")
                 ax.axis('off')
 
@@ -217,7 +217,7 @@ def get_PCA(force=False):
                 ax.set_aspect("equal")
                 ax.axis('off')
                 for i in range(len(projected)-1):
-                    ax.plot(projected[i:i+2, 0], projected[i:i+2, 1], color="black")
+                    ax.plot(projected[i:i+2, 0], projected[i:i+2, 1], color="#00000050")
                 fig.savefig(lines_path)
                 plt.clf()
                 plt.close()
