@@ -1,6 +1,7 @@
 import os, sys, json, xmltodict
 
-
+import bioiain as bi
+import subprocess
 
 
 def test():
@@ -25,6 +26,10 @@ def print_children(d):
     [print(k, v) for k, v in d.items() if type(v) == str]
     print("other:")
     [print(k, type(v), len(v)) for k, v in d.items() if type(v) != str and v is not None]
+
+
+
+
 
 def parse_pisa(pisa_id, folder="pisa_raw", name=None):
     interactions_path = os.path.join(folder, f"{pisa_id}.interactions.xml")
@@ -134,7 +139,59 @@ def parse_pisa(pisa_id, folder="pisa_raw", name=None):
 
 
 
-parse_pisa("test")
+
+def _pisa_to_xml(pisa_id, folder="pisa_raw", interfaces=True, assemblies=True, pisa_command="pisa"):
+    cmd = [
+        pisa_command,
+        pisa_id,
+        "-xml",
+    ]
+    if interfaces:
+        cmd_i = cmd + ["interfaces", ">", f"{folder}/{pisa_id}.interfaces.xml"]
+        subprocess.run(cmd_i)
+    if assemblies:
+        cmd_a = cmd + ["assemblies", ">", f"{folder}/{pisa_id}.assemblies.xml"]
+        subprocess.run(cmd_a)
+    return None, None
+
+def run_pisa(filepath,  pisa_id="temp", pisa_command="pisa", xml_folder="pisa_raw", interfaces=True, assemblies=True):
+    try:
+        ccp4_path = os.environ["CCP4"]
+    except KeyError:
+        bi.log("error", "CCP4 not enabled")
+        ccp4_path = None
+    if ccp4_path is None:
+        return None
+    print("CCP4 path:", ccp4_path)
+    filepath = os.path.abspath(filepath)
+    cmd = [
+        pisa_command,
+        pisa_id,
+        "-analyse",
+        filepath
+    ]
+    try:
+        subprocess.run(cmd, check=True)
+    except:
+        return None
+    print("PISA DONE")
+
+    if interfaces or assemblies:
+        int_file, ass_fie = _pisa_to_xml(pisa_id, folder=xml_folder, interfaces=interfaces, assemblies=assemblies)
+        return pisa_id, int_file, ass_fie
+    else:
+        return pisa_id
+
+
+
+
+
+
+
+
+
+session = run_pisa("1M2Z.cif")
+parse_pisa(session)
 
 
 
