@@ -96,8 +96,13 @@ import_bi()
 
 
 
+def cath_to_label(name, structure, label_folder="labels", force=False ):
+    pass
 
-def get_PCA(force=False):
+
+
+
+def get_PCA(force=False, labs=True, images=True):
     from sklearn.decomposition import PCA
     sys.path.append(".")
     import matplotlib.pyplot as plt
@@ -108,89 +113,43 @@ def get_PCA(force=False):
 
     for file in sorted(os.listdir(file_folder)):
         code = file.split(".")[0]
-        #print(code)
         structure = bi.biopython.loadPDB(os.path.join(file_folder, f"{code}.cif"))
         labels = {}
         chains = list(structure.get_chains())
-        if False:
-            header = bioiain.biopython.imports.read_mmcif(os.path.join(file_folder, file), subset=["_entity_poly", "_entity"])
-
-
-            if type(header["_entity_poly"]) is dict:
-                poly = [header["_entity_poly"]]
-            else:
-                poly = header["_entity_poly"]
-            for i, entity_poly in enumerate(poly):
-                bi.log(1, i, end=":")
-                #print(entity_poly)
-                #print(entity_poly["pdbx_strand_id"])
-
-
-                for strand in entity_poly["pdbx_strand_id"].split(","):
-                    strand = strand.strip()
-                    print(strand, end=" ")
-                    #print(chains[0].__dict__.keys())
-                    #print(chains[0]._id, chains[0].id, chains[0].full_id )
-                    #print(strand, chains, strand in chains)
-                    if strand in [c.id for c in chains]:
-                        labels[strand] = {"description": header["_entity",i,"pdbx_description"],
-                                          "length": [len(list(c.get_residues())) for c in chains if c.id == strand][0],
-                                          "chain":list([c for c in chains if c.id == strand])[0],
-                                          "cath": parse_cath(code, strand)}
-
-            print("")
-        else:
-            print(structure, end=": ")
+        label_path = f"labels/{code}.labels.json"
+        print(structure, end=":\t")
+        if ((not os.path.exists(label_path)) or force) and labs:
             for chain in chains:
                 l = None
                 cath = parse_cath(code, chain.id)
                 if cath is not None:
                     l = f"{cath['class_number']}.{cath['arch_number']}.{cath['top_number']}.{cath['hom_fam_number']}"
                     labels[chain.id] = {
-                        "chain": chain,
+                        "chain_id": chain.id,
                         "cath": cath,
                         "label": l
                     }
-                print(f"{chain}:{l}", end=" ")
-            print("")
+                print(f"{chain.id}:{l}", end="\t")
+            json.dump(labels, open(label_path, "w"), indent=4)
+        print("")
 
-
-
-
-
-
-        for ch, l in labels.items():
-            chain = l["chain"]
-            label_path = f"labels/{code}_{chain.id}.labels.json"
-            label = l["label"]
-            if (not os.path.exists(label_path)) or force:
-
-                #print(l)
-                #print(type(l["chain"]))
-
-
-                #print(chain, label)
-                coords = [a.coord for a in chain.get_atoms() if a.id == "CA"]
-                if len(coords) < 10:
-                    continue
-                #print(coords[:10])
-                #print(len(coords))
-                pca = PCA(n_components=3)
-                pca.fit(coords)
-                #print(pca.components_)
-
-                projected = pca.transform(coords)
-                #print(projected[0:10])
-
-                #print(bi)
-                #from bioiain import visualisation
-
-
+        if not images:
+            continue
+        for chain in chains:
             projected_path = f"imgs/projected/{code}_{chain.id}.png"
             connected_path = f"imgs/connected/{code}_{chain.id}.png"
             lines_path = f"imgs/lines/{code}_{chain.id}.png"
+            paths = (projected_path, connected_path, lines_path)
+            if any([not os.path.exists(p) for p in paths]) or force:
+                coords = [a.coord for a in chain.get_atoms() if a.id == "CA"]
+                if len(coords) < 10:
+                    continue
+                pca = PCA(n_components=3)
+                pca.fit(coords)
+                projected = pca.transform(coords)
 
-            if not (os.path.exists(projected_path) and os.path.exists(projected_path) and not force):
+
+            if (not os.path.exists(projected_path)) or (not os.path.exists(projected_path)) or force :
                 fig = plt.figure(figsize=(1,1))
                 ax = fig.add_subplot(111)
 
@@ -213,6 +172,9 @@ def get_PCA(force=False):
 
                 plt.clf()
                 plt.close()
+
+
+            if (not os.path.exists(lines_path)) or force:
                 fig = plt.figure(figsize=(1, 1))
                 ax = fig.add_subplot(111)
                 ax.set_aspect("equal")
@@ -223,31 +185,25 @@ def get_PCA(force=False):
                 plt.clf()
                 plt.close()
 
-            exp = {
-                "cath": l["cath"],
-                "label": label,
-                "file": file,
-                "chain": chain.id,
-                "paths": {
-                    "connected": connected_path,
-                    "projected": projected_path,
-                    "lines": lines_path,
-                }
-            }
-            json.dump(exp, open(label_path, "w"), indent=4)
 
 
-import torch
-import torchvision
-import torchvision.transforms as transforms
-import torchvision.datasets.vision as vision
-from torch.utils.data import Dataset, DataLoader
-from PIL import Image
-from sklearn.model_selection import train_test_split
+
 
 
 
 def image_classifier(mode="connected"):
+    import torch
+    import torchvision.transforms as transforms
+    from torch.utils.data import Dataset
+    from PIL import Image
+    from sklearn.model_selection import train_test_split
+
+
+    if "mega" in sys.argv:
+        file_folder = bi.biopython.downloadPDB("../internship/data", "mega-batch", file_path="../internship/data/mega-batch20K.txt", file_format="cif", overwrite=False)
+    else:
+        file_folder = bi.biopython.downloadPDB("../internship/data", "receptors", file_path="../internship/data/receptors.txt", file_format="cif", overwrite=False)
+
 
     transform = transforms.Compose(
         [transforms.ToTensor(),
@@ -259,18 +215,22 @@ def image_classifier(mode="connected"):
     label_to_index = {}
     index_to_label = {}
     labs = []
-    for file in os.listdir("imgs/connected"):
-        name = file.split(".")[0]
-        l_path = os.path.join("labels", f"{name}.labels.json")
+
+    print("DATASET:", file_folder)
+    for file in os.listdir(file_folder):
+        code = file.split(".")[0]
+        l_path = os.path.join("labels", f"{code}.labels.json")
         if os.path.exists(l_path):
-            labs.append(json.load(open(l_path))["label"])
-            structure_list.append(name)
+            lab_data = json.load(open(l_path))
+            labs.extend([v["label"] for v in lab_data.values()] )
+            structure_list.append(code)
     n_labs = {l: labs.count(l) for l in set(labs)}
 
     labs = list(set(labs))
     for n, l in enumerate(labs):
         label_to_index[l] = n
         index_to_label[n] = l
+
 
     class ImageDataset(Dataset):
         def __init__(self, struc_list, folder, label_folder=None):
@@ -285,13 +245,17 @@ def image_classifier(mode="connected"):
             self.labels = []
             for file in os.listdir(self.folder):
                 name = file.split(".")[0]
-                if name not in struc_list:
+                code, chain = name.split("_")
+                if code not in struc_list:
                     continue
-                l_path = os.path.join(self.label_folder, f"{name}.labels.json")
+                l_path = os.path.join(self.label_folder, f"{code}.labels.json")
                 if os.path.exists(l_path):
-                    labs.append(json.load(open(l_path))["label"])
-                    self.labels.append(f"{name}.labels.json")
-                    self.images.append(file)
+                    try:
+                        lab = json.load(open(l_path))[chain]["label"]
+                        self.labels.append(lab)
+                        self.images.append(file)
+                    except KeyError:
+                        pass
 
 
         def __len__(self):
@@ -305,13 +269,13 @@ def image_classifier(mode="connected"):
             code, ch = name.split("_")
 
             i_path = os.path.join(self.folder, fname)
-            l_path = os.path.join(self.label_folder, f"{name}.labels.json")
+            l_path = os.path.join(self.label_folder, f"{code}.labels.json")
 
             image = Image.open(i_path)
             #image = image.convert("RGB")
             image = transform(image)
 
-            label = label_to_index[json.load(open(l_path))["label"].lower().strip()]
+            label = label_to_index[json.load(open(l_path))[ch]["label"].lower().strip()]
 
             # print("emb:", emb.shape, "lab:", lab)
             return image, label
@@ -344,32 +308,6 @@ def image_classifier(mode="connected"):
 
     classes = labs
 
-
-
-    # functions to show an image
-
-
-    def imshow(img):
-        img = img / 2 + 0.5     # unnormalize
-        npimg = img.numpy()
-        plt.imshow(np.transpose(npimg, (1, 2, 0)))
-        plt.show()
-
-
-    # get some random training images
-    # print(len(trainset))
-    # t = []
-    # for i in range(4):
-    #     t.append([trainset[i]])
-    #
-    # images, labels = zip([[z[0], z[1]] for z in t])
-    #dataiter = iter(trainloader)
-    #images, labels = next(dataiter)
-
-    # show images
-    #imshow(torchvision.utils.make_grid(images))
-    # print labels
-    #print(' '.join(f'{classes[labels[j]]:5s}' for j in range(batch_size)))
 
     import torch.nn as nn
     import torch.nn.functional as F
@@ -434,9 +372,6 @@ def image_classifier(mode="connected"):
     dataiter = iter(testloader)
     images, labels = next(dataiter)
 
-    # print images
-    #imshow(torchvision.utils.make_grid(images))
-    #print('GroundTruth: ', ' '.join(f'{index_to_label[int(labels[j])]:5s}' for j in range(4)))
 
     net = Net(n_features = len(labs))
     net.load_state_dict(torch.load(PATH, weights_only=True))
@@ -444,9 +379,6 @@ def image_classifier(mode="connected"):
     outputs = net(images)
 
     _, predicted = torch.max(outputs, 1)
-
-    #print('Predicted: ', ' / '.join(f'{index_to_label[int(predicted[j])]:5s}'
-    #                              for j in range(4)))
 
     correct = 0
     total = 0
@@ -479,10 +411,6 @@ def image_classifier(mode="connected"):
                 if label == prediction:
                     correct_pred[classes[label]] += 1
                 total_pred[classes[label]] += 1
-
-    # print accuracy for each class
-
-
 
 
     if "mega" in sys.argv:
@@ -547,11 +475,12 @@ def image_classifier(mode="connected"):
 
     df.sort_index(level="cath", inplace=True)
     df.to_csv(df_path, index=False)
+    print(df)
 
 
-
+force = "-f" in sys.argv
 if "-l" in sys.argv or "-e" in sys.argv:
-    get_PCA("-f" in sys.argv)
+    get_PCA(force=force, labs="-l"in sys.argv, images="-e" in sys.argv)
 if "-t" in sys.argv:
     if "-all" in sys.argv:
         image_classifier(mode="connected")
