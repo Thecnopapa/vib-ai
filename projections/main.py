@@ -201,14 +201,24 @@ class Net(nn.Module):
         self.n_features = n_features
         self.n_chanels = n_chanels
         self.fig_size = fig_size
+        print("FIG_SIZE", self.fig_size)
         print("N_CHANNELS =", n_chanels)
         assert fig_size%32 == 0
-        self.kernel1 = 5
-        self.kernel2 = int(5*fig_size/32)
-        self.conv1 = nn.Conv2d(n_chanels, n_chanels*2, self.kernel1)
+        self.kernel1 = 4
+        self.kernel2 = 4
+        print("KERNELS:", self.kernel1, self.kernel2)
+
+        self.conv1 = nn.Conv2d(n_chanels, n_chanels*2, self.kernel1, stride=1)
         self.pool = nn.MaxPool2d(2, 2)
         self.conv2 = nn.Conv2d(n_chanels*2, int(fig_size/2), self.kernel2)
-        self.fc1 = nn.Linear(int(fig_size/2) * self.kernel2 * self.kernel2, fig_size*2)
+        self.red_fig_size = self.fig_size - self.kernel2 - self.kernel1 + 2
+
+
+        print("RED_FIG_SIZE =", self.red_fig_size)
+        assert self.red_fig_size % 2 == 0
+        print("CONV2 flat:", n_chanels*2 * int(self.red_fig_size/2) * self.red_fig_size)
+
+        self.fc1 = nn.Linear(int(self.red_fig_size/2) * n_chanels*2  * self.red_fig_size *int(fig_size/2) , fig_size*2)
         self.fc2 = nn.Linear(fig_size*2, fig_size)
         self.fc3 = nn.Linear(fig_size, n_features)
 
@@ -221,14 +231,22 @@ class Net(nn.Module):
 
     def forward(self, x):
         # [4, n_channels, 32, 32] / [4, n_channels, 100, 100]
-        print(x.shape)
-        x = self.pool(F.relu(self.conv1(x)))
+        #print(x.shape)
+        x = x.reshape([1, *x.shape])
+        #print(x.shape)
+        #print(x)
+        x = F.relu(self.conv1(x))
+        #print(x.shape)
+
+
         # [4, 6, 14, 14]
-        x = self.pool(F.relu(self.conv2(x)))
+        x = F.relu(self.conv2(x))
         # [4, 16, 5, 5]
+        #print(x.shape)
+
         x = torch.flatten(x, 1)
         # [4, 400] / [4, 7400]
-        print(x.shape)
+        #print(x.shape)
         x = F.relu(self.fc1(x))
         # [4, 120]
         x = F.relu(self.fc2(x))
@@ -320,7 +338,7 @@ def image_classifier(mode="connected"):
                     except KeyError:
                         pass
             img = Image.open(os.path.join(self.folder, self.images[0]))
-            print(img)
+            #print(img)
             self.channels = 1
             self.image_dims = img.size[0]
 
@@ -344,9 +362,9 @@ def image_classifier(mode="connected"):
 
             #image = image.convert("RGB")
             image = transform(image)[-1]#.resize((1,self.image_dims,self.image_dims))
-            print(image)
+            #print(image)
             #print(image.shape)
-            if True:
+            if False:
                 imgs = []
                 for channel in image:
                     imgs.append(T.ToPILImage()(image))
@@ -418,6 +436,8 @@ def image_classifier(mode="connected"):
             #print(outputs.shape)
             #print(inputs.shape)
             #print(labels.shape)
+            #print(outputs)
+            #print(labels)
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
