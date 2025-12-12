@@ -232,7 +232,8 @@ class Net(nn.Module):
     def forward(self, x):
         # [4, n_channels, 32, 32] / [4, n_channels, 100, 100]
         #print(x.shape)
-        x = x.reshape([1, *x.shape])
+        if len(x.shape) == 3:
+            x = x.reshape([1, *x.shape])
         #print(x.shape)
         #print(x)
         x = F.relu(self.conv1(x))
