@@ -224,10 +224,10 @@ class Net(nn.Module):
 
         self.rfc3 = nn.Linear(n_features, fig_size)
         self.rfc2 = nn.Linear(fig_size, fig_size*2)
-        self.rfc1 = nn.Linear(fig_size*2, int(fig_size/2) * self.kernel2 * self.kernel2)
+        self.rfc1 = nn.Linear(fig_size*2, int(self.red_fig_size/2) * n_chanels*2  * self.red_fig_size *int(fig_size/2))
         self.rconv2 = nn.ConvTranspose2d(int(fig_size/2), n_chanels*2, self.kernel2)
         self.rpool = nn.MaxUnpool2d(2, 2)
-        self.rconv1 = nn.ConvTranspose2d(n_chanels*2, n_chanels, self.kernel1)
+        self.rconv1 = nn.ConvTranspose2d(n_chanels*2, n_chanels, self.kernel1, stride=1)
 
     def forward(self, x):
         # [4, n_channels, 32, 32] / [4, n_channels, 100, 100]
@@ -241,10 +241,10 @@ class Net(nn.Module):
 
 
         # [4, 6, 14, 14]
+        #print(x.shape)
         x = F.relu(self.conv2(x))
         # [4, 16, 5, 5]
         #print(x.shape)
-
         x = torch.flatten(x, 1)
         # [4, 400] / [4, 7400]
         #print(x.shape)
@@ -262,7 +262,7 @@ class Net(nn.Module):
         x = F.relu(self.rfc2(x))
         x = F.relu(self.rfc1(x))
         print(x.shape)
-        x = torch.unflatten(x, -1, (int(self.fig_size/2), self.kernel2, self.kernel2))
+        x = torch.unflatten(x, -1, (int(self.fig_size/2), self.red_fig_size, self.red_fig_size))
         print(x.shape)
         x = F.relu(self.rconv2(x))
         print(x.shape)
@@ -420,7 +420,7 @@ def image_classifier(mode="connected"):
 
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
-    epochs = 20
+    epochs = 2
     for epoch in range(epochs):  # loop over the dataset multiple times
         print("EPOCH: ", epoch, end="\r")
 
@@ -445,8 +445,8 @@ def image_classifier(mode="connected"):
 
             # print statistics
             running_loss += loss.item()
-            if i % 1000 == 999:  # print every 1000 mini-batches
-                print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / 2000:.3f}', end = "\r")
+            if i % 10 == 0:  # print every 1000 mini-batches
+                print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / 10:.3f}', end = "\r")
                 running_loss = 0.0
 
     print('Finished Training ({} epochs)'.format(epochs))
@@ -581,7 +581,7 @@ if "decode" in sys.argv:
             model_path = f'./cifar_net_projected.pth'
         else:
             model_path = f'./cifar_net_connected.pth'
-        net = Net(n_features=6)
+        net = Net(n_features=6, fig_size=128, n_chanels=1)
         net.load_state_dict(torch.load(model_path, weights_only=True))
         decoded = net.decode(i)
         print("DECODED:")
@@ -599,7 +599,7 @@ if "decode" in sys.argv:
         #plt.imshow(perm[0:2], alpha=perm[3] )
         #plt.imshow(np.squeeze(decoded.detach().numpy()))
         #plt.show()
-        img = T.ToPILImage(mode="RGB")(perm[:3])
+        img = T.ToPILImage()(perm)
         preds.append(img)
 
     fig = plt.figure(figsize=(12, 8))
