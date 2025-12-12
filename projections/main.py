@@ -420,7 +420,7 @@ def image_classifier(mode="connected"):
 
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
-    epochs = 2
+    epochs = 20
     for epoch in range(epochs):  # loop over the dataset multiple times
         print("EPOCH: ", epoch, end="\r")
 
@@ -445,7 +445,7 @@ def image_classifier(mode="connected"):
 
             # print statistics
             running_loss += loss.item()
-            if i % 10 == 0:  # print every 1000 mini-batches
+            if i % 10 == 9:  # print every 1000 mini-batches
                 print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / 10:.3f}', end = "\r")
                 running_loss = 0.0
 
