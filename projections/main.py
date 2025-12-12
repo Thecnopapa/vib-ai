@@ -6,6 +6,11 @@ import matplotlib.pyplot as plt
 
 from bioiain.utilities import str_to_list_with_literals
 
+import PIL.Image
+import matplotlib.pyplot as plt
+import torchvision.transforms as T
+from mpl_toolkits.axes_grid1 import ImageGrid
+
 
 def get_family_desc(fam, cath_folder="cath"):
     fam_list_names_file = os.path.join(cath_folder, "cath-superfamily-list.txt")
@@ -150,7 +155,7 @@ def get_PCA(force=False, labs=True, images=True):
 
 
             if (not os.path.exists(projected_path)) or (not os.path.exists(projected_path)) or force :
-                fig = plt.figure(figsize=(1,1))
+                fig = plt.figure(figsize=(1.28,1.28))
                 ax = fig.add_subplot(111)
 
                 ax.scatter(projected[:, 0], projected[:, 1], c="#00000050", marker=".")
@@ -164,31 +169,87 @@ def get_PCA(force=False, labs=True, images=True):
 
 
 
-                fig.savefig(projected_path)
+                fig.savefig(projected_path, transparent=True)
 
                 for i in range(len(projected)-1):
                     ax.plot(projected[i:i+2, 0], projected[i:i+2, 1], color="#00000050")
-                fig.savefig(connected_path)
+                fig.savefig(connected_path, transparent=True)
 
                 plt.clf()
                 plt.close()
 
 
             if (not os.path.exists(lines_path)) or force:
-                fig = plt.figure(figsize=(1, 1))
+                fig = plt.figure(figsize=(1.28, 1.28))
                 ax = fig.add_subplot(111)
                 ax.set_aspect("equal")
                 ax.axis('off')
                 for i in range(len(projected)-1):
                     ax.plot(projected[i:i+2, 0], projected[i:i+2, 1], color="#00000050")
-                fig.savefig(lines_path)
+                fig.savefig(lines_path, transparent=True)
                 plt.clf()
                 plt.close()
 
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
 
+class Net(nn.Module):
+    def __init__(self, n_features=10, n_chanels=4, fig_size=64):
+        super().__init__()
+        self.n_features = n_features
+        self.n_chanels = n_chanels
+        self.fig_size = fig_size
+        print("N_CHANNELS =", n_chanels)
+        assert fig_size%32 == 0
+        self.kernel1 = 5
+        self.kernel2 = int(5*fig_size/32)
+        self.conv1 = nn.Conv2d(n_chanels, n_chanels*2, self.kernel1)
+        self.pool = nn.MaxPool2d(2, 2)
+        self.conv2 = nn.Conv2d(n_chanels*2, int(fig_size/2), self.kernel2)
+        self.fc1 = nn.Linear(int(fig_size/2) * self.kernel2 * self.kernel2, fig_size*2)
+        self.fc2 = nn.Linear(fig_size*2, fig_size)
+        self.fc3 = nn.Linear(fig_size, n_features)
 
+        self.rfc3 = nn.Linear(n_features, fig_size)
+        self.rfc2 = nn.Linear(fig_size, fig_size*2)
+        self.rfc1 = nn.Linear(fig_size*2, int(fig_size/2) * self.kernel2 * self.kernel2)
+        self.rconv2 = nn.ConvTranspose2d(int(fig_size/2), n_chanels*2, self.kernel2)
+        self.rpool = nn.MaxUnpool2d(2, 2)
+        self.rconv1 = nn.ConvTranspose2d(n_chanels*2, n_chanels, self.kernel1)
 
+    def forward(self, x):
+        # [4, n_channels, 32, 32] / [4, n_channels, 100, 100]
+        print(x.shape)
+        x = self.pool(F.relu(self.conv1(x)))
+        # [4, 6, 14, 14]
+        x = self.pool(F.relu(self.conv2(x)))
+        # [4, 16, 5, 5]
+        x = torch.flatten(x, 1)
+        # [4, 400] / [4, 7400]
+        print(x.shape)
+        x = F.relu(self.fc1(x))
+        # [4, 120]
+        x = F.relu(self.fc2(x))
+        # [4, 84]
+        x = self.fc3(x)
+        # [4, *n_features*]
+        return x
+
+    def decode(self, x):
+        print(x.shape)
+        x = F.relu(self.rfc3(x))
+        x = F.relu(self.rfc2(x))
+        x = F.relu(self.rfc1(x))
+        print(x.shape)
+        x = torch.unflatten(x, -1, (int(self.fig_size/2), self.kernel2, self.kernel2))
+        print(x.shape)
+        x = F.relu(self.rconv2(x))
+        print(x.shape)
+        x = F.relu(self.rconv1(x))
+        print(x.shape)
+        return x
 
 
 def image_classifier(mode="connected"):
@@ -207,8 +268,9 @@ def image_classifier(mode="connected"):
 
     transform = transforms.Compose(
         [transforms.ToTensor(),
-         transforms.Resize((32,32)),
-         transforms.Normalize((0.5, 0.5, 0.5, 0.5), (0.5, 0.5, 0.5, 0.5))])
+         #transforms.Resize((64,64)),
+         #transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+         ])
 
     structure_list = []
 
@@ -243,6 +305,7 @@ def image_classifier(mode="connected"):
 
             self.images = []
             self.labels = []
+            self.image_dims = None
             for file in os.listdir(self.folder):
                 name = file.split(".")[0]
                 code, chain = name.split("_")
@@ -256,6 +319,12 @@ def image_classifier(mode="connected"):
                         self.images.append(file)
                     except KeyError:
                         pass
+            img = Image.open(os.path.join(self.folder, self.images[0]))
+            print(img)
+            self.channels = 1
+            self.image_dims = img.size[0]
+
+
 
 
         def __len__(self):
@@ -272,8 +341,22 @@ def image_classifier(mode="connected"):
             l_path = os.path.join(self.label_folder, f"{code}.labels.json")
 
             image = Image.open(i_path)
+
             #image = image.convert("RGB")
-            image = transform(image)
+            image = transform(image)[-1]#.resize((1,self.image_dims,self.image_dims))
+            print(image)
+            #print(image.shape)
+            if True:
+                imgs = []
+                for channel in image:
+                    imgs.append(T.ToPILImage()(image))
+
+                fig = plt.figure(figsize=(8, 8))
+                grid = ImageGrid(fig, 111, nrows_ncols=(2, 2), axes_pad=0.1)
+                for ax, im in zip(grid, imgs):
+                    ax.imshow(im)
+                plt.show()
+
 
             label = label_to_index[json.load(open(l_path))[ch]["label"].lower().strip()]
 
@@ -284,7 +367,7 @@ def image_classifier(mode="connected"):
 
 
 
-    batch_size = 4
+    batch_size = 1
 
     print("N chains:", len(structure_list))
     print("N labs:", len(labs))
@@ -309,29 +392,10 @@ def image_classifier(mode="connected"):
     classes = labs
 
 
-    import torch.nn as nn
-    import torch.nn.functional as F
 
-    class Net(nn.Module):
-        def __init__(self, n_features=10):
-            super().__init__()
-            self.conv1 = nn.Conv2d(4, 6, 5)
-            self.pool = nn.MaxPool2d(2, 2)
-            self.conv2 = nn.Conv2d(6, 16, 5)
-            self.fc1 = nn.Linear(16 * 5 * 5, 120)
-            self.fc2 = nn.Linear(120, 84)
-            self.fc3 = nn.Linear(84, n_features)
 
-        def forward(self, x):
-            x = self.pool(F.relu(self.conv1(x)))
-            x = self.pool(F.relu(self.conv2(x)))
-            x = torch.flatten(x, 1)  # flatten all dimensions except batch
-            x = F.relu(self.fc1(x))
-            x = F.relu(self.fc2(x))
-            x = self.fc3(x)
-            return x
 
-    net = Net(len(labs))
+    net = Net(len(labs), n_chanels=trainset.channels, fig_size=trainset.image_dims)
 
     import torch.optim as optim
 
@@ -373,7 +437,7 @@ def image_classifier(mode="connected"):
     images, labels = next(dataiter)
 
 
-    net = Net(n_features = len(labs))
+    net = Net(n_features = len(labs), n_chanels=trainset.channels, fig_size=trainset.image_dims)
     net.load_state_dict(torch.load(PATH, weights_only=True))
 
     outputs = net(images)
@@ -476,6 +540,56 @@ def image_classifier(mode="connected"):
     df.sort_index(level="cath", inplace=True)
     df.to_csv(df_path, index=False)
     print(df)
+
+if "decode" in sys.argv:
+    to_pred = [
+        [1, 0, 0, 0, 0, 0],
+        [0, 1, 0, 0, 0, 0],
+        [0, 0, 1, 0, 0, 0],
+        [0, 0, 0, 1, 0, 0],
+        [0, 0, 0, 0, 1, 0],
+        [0, 0, 0, 0, 1, 0],
+    ]
+    preds = []
+    for p in to_pred:
+        i = torch.Tensor(p)
+        print(i.shape)
+        if "-lines" in sys.argv:
+            model_path = f'./cifar_net_lines.pth'
+        elif "-dots" in sys.argv:
+            model_path = f'./cifar_net_projected.pth'
+        else:
+            model_path = f'./cifar_net_connected.pth'
+        net = Net(n_features=6)
+        net.load_state_dict(torch.load(model_path, weights_only=True))
+        decoded = net.decode(i)
+        print("DECODED:")
+        print(decoded)
+        print(decoded.shape)
+
+        print(decoded.shape)
+        decoded = decoded.detach()
+        perm = decoded
+        #perm = perm.permute(0, 1, 2)
+        perm = torch.sigmoid(perm) * 255
+        print(perm)
+
+        print(perm.shape)
+        #plt.imshow(perm[0:2], alpha=perm[3] )
+        #plt.imshow(np.squeeze(decoded.detach().numpy()))
+        #plt.show()
+        img = T.ToPILImage(mode="RGB")(perm[:3])
+        preds.append(img)
+
+    fig = plt.figure(figsize=(12, 8))
+    grid = ImageGrid(fig, 111, nrows_ncols=(2, 3), axes_pad=0.1)
+    for ax, im in zip(grid, preds):
+        ax.imshow(im)
+    plt.show()
+
+
+    quit()
+
 
 
 force = "-f" in sys.argv
