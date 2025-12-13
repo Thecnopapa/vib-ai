@@ -36,7 +36,10 @@ async def test():
 class AsyncPool(object):
     def __init__(self, n_workers="auto"):
         self.tasks = {}
-        self.started = False
+        self.current_pool = None
+        self.current_keys = None
+        self.current_tasks = None
+        self.running = False
         self.start_time = None
         self.end_time = None
 
@@ -87,21 +90,38 @@ class AsyncPool(object):
         print(">")
 
 
-    async def run(self, raise_errors=True, return_dict=False):
-        keys = []
-        tasks = []
+    async def _run(self, wait=False, **kwargs):
+        if self.running:
+            bioiain.log("warning", "AsyncPool.run(): Already running")
+            raise Exception(f"Already running")
+        self.running = True
+        self.current_keys = []
+        self.current_tasks = []
         for k, v in self.tasks.items():
             if v["status"] != "pending":
                 continue
-            keys.append(k)
-            tasks.append(v["awaitable"])
+            self.current_keys.append(k)
+            self.current_tasks.append(v["awaitable"])
             self.tasks[k]["status"] = "running"
-        n_tasks = len(tasks)
-        print(f" * AsyncPool: Running {n_tasks} tasks")
-        ret = await asyncio.gather(*tasks, return_exceptions=True)
+        n_tasks = len(self.current_tasks)
+        print(f"* AsyncPool: Running {n_tasks} tasks (wait={wait})")
+        self.current_pool = asyncio.gather(*self.current_tasks, return_exceptions=True)
+        if wait:
+            return await self._await(**kwargs)
+        else:
+            return self.current_pool
+
+
+
+
+    async def _await(self, raise_errors=True, return_dict=False, **kwargs):
+        if self.current_pool is None:
+            bioiain.log("warning", "AsyncPool._await(): No running pool")
+            return None
+        ret = await self.current_pool
         errors = 0
         ok = 0
-        for k, rv in zip(keys, ret):
+        for k, rv in zip(self.current_keys, ret):
             self.tasks[k]["return"] = rv
             if isinstance(rv, Exception):
                 self.tasks[k]["status"] = "error"
@@ -112,17 +132,32 @@ class AsyncPool(object):
             else:
                 self.tasks[k]["status"] = "done"
                 ok += 1
-        print(f" * AsyncPool: Finished {ok+errors} tasks ({errors} errors)")
+        print(f"* AsyncPool: Finished {ok+errors} tasks ({errors} errors)")
+        self.running = False
+        self.current_keys = None
+        self.current_tasks = None
+        self.current_pool = None
+
         if return_dict:
             return self.tasks
         return ret
 
+
+
+
+    def start(self, **kwargs):
+        asyncio.run(self._run(**kwargs))
+        return self
+
     def without_errors(self, raise_errors=False, **kwargs):
-        self.start(raise_errors=raise_errors, **kwargs)
+        return self.start(raise_errors=raise_errors, **kwargs)
 
+    def wait(self, wait=True, **kwargs):
+        return self.start(wait=wait, **kwargs)
 
-    def start(self, raise_errors=True, **kwargs):
-        asyncio.run(self.run(raise_errors=raise_errors, **kwargs))
+    def await(self, **kwargs):
+        asyncio.run(self._await(**kwargs))
+        return self
 
     def get_return(self, key):
         return self.tasks[key]["return"]
@@ -139,7 +174,8 @@ pool + test()
 pool.add(simple("aaaa"), task_id="task1")
 pool.add(simple("bbbb"), task_id="10")
 print(pool)
-print(pool.start(raise_errors=False))
+print(pool.start(raise_errors=False, wait=True))
+pool.wait()
 pool.info()
 
 
