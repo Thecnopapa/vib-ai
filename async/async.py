@@ -30,17 +30,33 @@ async def test():
 #print("DONE")
 
 
-def awaitable(fun, *args, **kwargs):
-    afun = async fun
-    return afun
 
-def non_awaitable():
-    pass
 
-print(non_awaitable, type(non_awaitable))
 
-yes_awaitable = awaitable(non_awaitable)
-print(yes_awaitable, type(yes_awaitable))
+class AsyncPool(object):
+    def __init__(self, n_workers="auto"):
+        self.pending = {}
+        self.done = {}
+        self.started = False
+        self.start_time = None
+        self.end_time = None
 
+    def __len__(self):
+        return len(self.pending) + len(self.done)
+
+    def __repr__(self):
+        return f"<AsyncPool: pending:{len(self.pending)} done:{self.done}>"
+
+    def __add__(self, awaitable):
+        self.pending[len(self)] = asyncio.createTask(awaitable)
+
+    async def start():
+        asyncio.gather()
+
+
+
+pool = AsyncPool()
+print(len(pool))
+print(pool)
 
 
