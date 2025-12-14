@@ -11,6 +11,8 @@ import matplotlib.pyplot as plt
 import torchvision.transforms as T
 from mpl_toolkits.axes_grid1 import ImageGrid
 
+from parallel import AsyncPool
+
 
 def get_family_desc(fam, cath_folder="cath"):
     fam_list_names_file = os.path.join(cath_folder, "cath-superfamily-list.txt")

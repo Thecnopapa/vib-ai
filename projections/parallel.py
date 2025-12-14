@@ -1,4 +1,5 @@
-import os, sys, json, asyncio, time, threading, bioiain
+import os, sys, json, asyncio, time, threading
+from bioiain import log
 
 #print("START")
 print("imported async utils")
@@ -93,7 +94,7 @@ class AsyncPool(object):
 
     async def _run(self, wait=False, **kwargs):
         if self.running:
-            bioiain.log("warning", "AsyncPool.run(): Already running")
+            log("warning", "AsyncPool.run(): Already running")
             raise Exception(f"Already running")
         self.running = True
         self.current_keys = []
@@ -117,7 +118,7 @@ class AsyncPool(object):
 
     async def _await(self, raise_errors=True, return_dict=False, **kwargs):
         if self.current_pool is None:
-            bioiain.log("warning", "AsyncPool._await(): No running pool")
+            log("warning", "AsyncPool._await(): No running pool")
             return None
         ret = await self.current_pool
         errors = 0
@@ -127,7 +128,7 @@ class AsyncPool(object):
             if isinstance(rv, Exception):
                 self.tasks[k]["status"] = "error"
                 errors += 1
-                bioiain.log("error", f"in task: {k}: {rv}")
+                log("error", f"in task: {k}: {rv}")
                 if raise_errors:
                     raise rv
             else:
