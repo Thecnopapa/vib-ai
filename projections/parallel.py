@@ -2,35 +2,47 @@ import os, sys, json, asyncio, time, threading
 from bioiain import log
 
 #print("START")
-print("imported async utils")
-print("Available CPUs:", os.cpu_count())
-async def wait(seconds):
-    print("waiting:", seconds)
-    await asyncio.sleep(seconds)
-    print("waited:", seconds)
-
-
-async def simple(text, sleep=False):
-    print("start:", text)
-    if sleep:
-        await wait(1)
-        #raise Exception("misc error")
-    print("end:", text)
+print("imported parallel utils")
+cpu_count = os.cpu_count()
+print("Available CPUs:", cpu_count)
 
 
 
 
-async def test():
+def split_iterable(iterable, n_parts:int|str="auto"):
+    
+    if n_parts == "auto":
+        n_parts = cpu_count - 1
+    elif n_parts == "max":
+        n_parts = cpu_count
+    elif n_parts == "double":
+        n_parts = cpu_count*2
+    
+    assert type(n_parts) == int
+    if n_parts <= 1:
+        return [iterable]
 
-    t1 = simple("fun 1", True)
-    t2 = simple("fun 2")
-    return await asyncio.gather(t1, t2)
+    l = len(iterable)
+    part_size = l//n_parts
+    last_part_size = l%n_parts
+    out = []
+    t = type(iterable)
+    for n in range(n_parts):
+        start = part_size*n
+        if n == n_parts -1:
+            end = start + last_part_size
+        else:
+            end = start + part_size
+        if t in (list, tuple, str):
+            out.append([e for e in iterable[start:end]])
+        elif t == dict:
+            out.append({k:v for k,v in iterable.items()[start:end]})
+        else:
+            log("error", "Unrecognised iterable type:", t)
+            return iterable
+    return out
 
-
-#asyncio.run(test())
-
-#print("DONE")
-
+        
 
 
 
@@ -165,15 +177,5 @@ class AsyncPool(object):
     def get_return(self, key):
         return self.tasks[key]["return"]
 
-
-if __name__ == "__main__":
-
-    pool = AsyncPool()
-    print(pool)
-    for n in range(30):
-        pool + wait(10)
-    pool.info()
-    pool.start()
-    pool.info()
 
 

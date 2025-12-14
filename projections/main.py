@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import torchvision.transforms as T
 from mpl_toolkits.axes_grid1 import ImageGrid
 
-from parallel import AsyncPool
+from parallel import *
 
 
 def get_family_desc(fam, cath_folder="cath"):
@@ -117,7 +117,9 @@ def get_PCA(force=False, labs=True, images=True):
         file_folder = bi.biopython.downloadPDB("../internship/data", "mega-batch", file_path="../internship/data/mega-batch20K.txt", file_format="cif", overwrite=False)
     else:
         file_folder = bi.biopython.downloadPDB("../internship/data", "receptors", file_path="../internship/data/receptors.txt", file_format="cif", overwrite=False)
-
+    batches = split_iterable(os.listdir(file_folder))
+    [print(b) for b in batches]
+    exit()
     for file in sorted(os.listdir(file_folder)):
         code = file.split(".")[0]
         structure = bi.biopython.loadPDB(os.path.join(file_folder, f"{code}.cif"))
