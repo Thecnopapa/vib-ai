@@ -6,6 +6,7 @@ print("Available CPUs:", os.cpu_count())
 async def wait(seconds):
     print("waiting:", seconds)
     await asyncio.sleep(seconds)
+    print("waited:", seconds)
 
 
 async def simple(text, sleep=False):
@@ -106,10 +107,10 @@ class AsyncPool(object):
         n_tasks = len(self.current_tasks)
         print(f"* AsyncPool: Running {n_tasks} tasks (wait={wait})")
         self.current_pool = asyncio.gather(*self.current_tasks, return_exceptions=True)
-        if wait:
+        if True:
             return await self._await(**kwargs)
         else:
-            return self.current_pool
+            return self._await(**kwargs)
 
 
 
@@ -145,37 +146,33 @@ class AsyncPool(object):
 
 
 
-    def start(self, **kwargs):
-        asyncio.run(self._run(**kwargs))
+    def start(self, wait=False, **kwargs):
+        asyncio.run(self._run(wait=wait, **kwargs))
         return self
 
     def without_errors(self, raise_errors=False, **kwargs):
         return self.start(raise_errors=raise_errors, **kwargs)
 
-    def wait(self, wait=True, **kwargs):
+    def _deprecated_wait(self, wait=True, **kwargs):
         return self.start(wait=wait, **kwargs)
 
-    def await(self, **kwargs):
+    def wait(self, **kwargs):
         asyncio.run(self._await(**kwargs))
         return self
+        
 
     def get_return(self, key):
         return self.tasks[key]["return"]
 
 
+if __name__ == "__main__":
 
-
-pool = AsyncPool()
-print(pool)
-
-pool + simple(1, sleep=True)
-pool + simple(2)
-pool + test()
-pool.add(simple("aaaa"), task_id="task1")
-pool.add(simple("bbbb"), task_id="10")
-print(pool)
-print(pool.start(raise_errors=False, wait=True))
-pool.wait()
-pool.info()
+    pool = AsyncPool()
+    print(pool)
+    for n in range(30):
+        pool + wait(10)
+    pool.info()
+    pool.start()
+    pool.info()
 
 
