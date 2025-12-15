@@ -10,26 +10,32 @@ print("Available CPUs:", cpu_count)
 
 
 def split_iterable(iterable, n_parts:int|str="auto"):
-    
+
     if n_parts == "auto":
         n_parts = cpu_count - 1
     elif n_parts == "max":
         n_parts = cpu_count
     elif n_parts == "double":
         n_parts = cpu_count*2
-    
+
     assert type(n_parts) == int
     if n_parts <= 1:
         return [iterable]
 
     l = len(iterable)
+    print("###")
+    print(n_parts)
     part_size = l//n_parts
     last_part_size = l%n_parts
+    print(part_size, last_part_size)
     out = []
     t = type(iterable)
+
     for n in range(n_parts):
         start = part_size*n
         if n == n_parts -1:
+            if last_part_size == 0:
+                continue
             end = start + last_part_size
         else:
             end = start + part_size
@@ -42,13 +48,14 @@ def split_iterable(iterable, n_parts:int|str="auto"):
             return iterable
     return out
 
-        
+
 
 
 
 
 class AsyncPool(object):
     def __init__(self, n_workers="auto"):
+        self.n_workers = n_workers
         self.tasks = {}
         self.current_pool = None
         self.current_keys = None
@@ -172,10 +179,45 @@ class AsyncPool(object):
     def wait(self, **kwargs):
         asyncio.run(self._await(**kwargs))
         return self
-        
+
 
     def get_return(self, key):
         return self.tasks[key]["return"]
+
+
+
+class ThreadPool(object):
+    def __init__(self):
+        self.threads = {}
+        self.running = False
+
+
+    def add(self, fun, *args, **kwargs):
+        t = threading.Thread(target=fun, args=args, kwargs=kwargs)
+        self.threads[len(self.threads)] = {"thread": t, "fun": fun, "status": "pending"}
+        return t
+
+    def start(self, wait=False, **kwargs):
+        pending_threads = {k: v for k, v in self.threads.items() if v["status"] == "pending"}
+        for k, t in pending_threads.items():
+            t["thread"].name = "Thread {}".format(k)
+            t["thread"].start()
+            t["status"] = "running"
+        print(f"* ThreadPool: Running {len(pending_threads)} tasks (wait={wait})")
+        if wait:
+            self._await(**kwargs)
+
+
+    def _await(self, **kwargs):
+        running_threads = {k:v for k,v in self.threads.items() if v["status"] == "running"}
+        ok = 0
+        errors = 0
+        for k, t in running_threads.items():
+            t["thread"].join()
+            t["status"] = "done"
+            ok += 1
+        print(f"* AsyncPool: Finished {ok + errors} tasks ({errors} errors)")
+
 
 
 

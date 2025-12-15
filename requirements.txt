@@ -15,6 +15,7 @@ seaborn
 transformers
 torch
 torchvision
+torchview
 scikit-learn
 plotly
 kaleido
