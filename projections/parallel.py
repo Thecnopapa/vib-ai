@@ -4,6 +4,8 @@ from bioiain import log
 #print("START")
 print("imported parallel utils")
 cpu_count = os.cpu_count()
+if os.environ.get("SLURM_CPUS_PER_TASK", None) is not None:
+    cpu_count = int(os.environ["SLURM_CPUS_PER_TASK"])
 print("Available CPUs:", cpu_count)
 
 
