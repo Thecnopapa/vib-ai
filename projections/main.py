@@ -210,7 +210,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
     from torch.utils.data import Dataset
     from PIL import Image
     from sklearn.model_selection import train_test_split
-    from models import *
+    from models import Net
 
 
     if "mega" in sys.argv:
