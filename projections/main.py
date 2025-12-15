@@ -2,7 +2,7 @@ import os, sys, json
 import warnings
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
+
 
 from bioiain.utilities import str_to_list_with_literals
 
@@ -112,6 +112,8 @@ def cath_to_label(name, structure, label_folder="labels", force=False ):
 def get_PCA(force=False, labs=True, images=True):
     from sklearn.decomposition import PCA
     sys.path.append(".")
+    import matplotlib
+    matplotlib.use('agg')
     import matplotlib.pyplot as plt
     if "mega" in sys.argv:
         file_folder = bi.biopython.downloadPDB("../internship/data", "mega-batch", file_path="../internship/data/mega-batch20K.txt", file_format="cif", overwrite=False)
@@ -181,8 +183,7 @@ def get_PCA(force=False, labs=True, images=True):
                         ax.plot(projected[i:i+2, 0], projected[i:i+2, 1], color="#00000050")
                     fig.savefig(connected_path, transparent=True)
 
-                    plt.clf()
-                    plt.close()
+                    plt.close(fig)
 
 
                 if (not os.path.exists(lines_path)) or force:
@@ -193,8 +194,7 @@ def get_PCA(force=False, labs=True, images=True):
                     for i in range(len(projected)-1):
                         ax.plot(projected[i:i+2, 0], projected[i:i+2, 1], color="#00000050")
                     fig.savefig(lines_path, transparent=True)
-                    plt.clf()
-                    plt.close()
+                    plt.close(fig)
 
     pool = ThreadPool()
     for b in batches:
@@ -205,7 +205,7 @@ def get_PCA(force=False, labs=True, images=True):
 
 
 
-def image_classifier(mode="connected", train = True, decode=False, view=False):
+def image_classifier(mode="connected", train = True, decode=False, view=False, temp=False):
     import torch
     import torchvision.transforms as transforms
     from torch.utils.data import Dataset
@@ -382,22 +382,25 @@ def image_classifier(mode="connected", train = True, decode=False, view=False):
                 l_path = os.path.join(self.label_folder, f"{code}.labels.json")
 
                 image = Image.open(i_path)
-
                 #image = image.convert("RGB")
-                image = transform(image)[-1]#.resize((1,self.image_dims,self.image_dims))
+                image = transform(image)#[-1]#.resize((1,self.image_dims,self.image_dims))
                 #print(image)
                 #print(image.shape)
                 if False:
+                    print(i_path)
+
                     imgs = []
                     for channel in image:
-                        imgs.append(T.ToPILImage()(image))
+                        imgs.append(T.ToPILImage()(channel))
 
                     fig = plt.figure(figsize=(8, 8))
                     grid = ImageGrid(fig, 111, nrows_ncols=(2, 2), axes_pad=0.1)
                     for ax, im in zip(grid, imgs):
                         ax.imshow(im)
+                        ax.set_axis_off()
                     plt.show()
 
+                image = image[-1]
 
                 label = label_to_index[json.load(open(l_path))[ch]["label"].lower().strip()]
 
@@ -445,6 +448,10 @@ def image_classifier(mode="connected", train = True, decode=False, view=False):
         epochs = 20
         for epoch in range(epochs):  # loop over the dataset multiple times
             print("EPOCH: ", epoch, end="\r")
+            torch.save(net.state_dict(), "./model.temp.pth")
+            if epoch//5 == 0:
+                #image_classifier(train=False, decode=True, temp=True)
+                pass
 
             running_loss = 0.0
             for i, data in enumerate(trainloader, 0):
@@ -572,7 +579,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False):
                 accuracy = None
             else:
                 accuracy = 100 * float(correct_count) / total_pred[classname]
-                print(f'Accuracy for class: {classname:5s}: \t{accuracy:.1f}%\tcorrect: {correct_count}/{total_pred[classname]}\tin data: {n_labs[classname]}\ttitle: {title}')
+                print(f'Accuracy for class ({label_to_index[classname]}): {classname:5s}: \t{accuracy:.1f}%\tcorrect: {correct_count}/{total_pred[classname]}\tin data: {n_labs[classname]}\ttitle: {title}')
 
                 df.loc[(classname, dataset, mode), "correct"] = correct_count
                 df.loc[(classname, dataset, mode), "total"] = total_pred[classname]
@@ -605,17 +612,30 @@ def image_classifier(mode="connected", train = True, decode=False, view=False):
             [0, 0, 0, 0, 1, 0],
         ]
         preds = []
+        n_features = 6
+        if "-n" in sys.argv:
+            n_features = int(sys.argv[sys.argv.index("-n") + 1])
+        if "-p" in sys.argv:
+
+            pred_labels = [int(p) for p in sys.argv[sys.argv.index("-p") + 1].split(",")]
+            to_pred = []
+            for pred_label in pred_labels:
+                to_pred.append([0]*pred_label+[1]+[0]*(n_features-pred_label-1))
+            print(to_pred)
+            print(len(to_pred))
         for p in to_pred:
             i = torch.Tensor(p)
             print(i.shape)
-            net = Net(n_features=6, fig_size=128, n_chanels=1)
-            if "-lines" in sys.argv:
+            net = Net(n_features=n_features, fig_size=128, n_chanels=1)
+            if temp:
+                model_path = "./model.temp.pth"
+            elif "-lines" in sys.argv:
                 model_path = f'./{net.__class__.__name__}_lines_{dataset_name}.model.pth'
             elif "-dots" in sys.argv:
                 model_path = f'./{net.__class__.__name__}_projected_{dataset_name}.model.pth'
             else:
                 model_path = f'./{net.__class__.__name__}_connected_{dataset_name}.model.pth'
-
+            print(model_path)
             net.load_state_dict(torch.load(model_path, weights_only=True))
             decoded = net.decode(i)
             print("DECODED:")
@@ -660,7 +680,7 @@ if "-t" in sys.argv:
     else:
         image_classifier(mode="connected")
 if "decode" in sys.argv:
-    image_classifier(mode="connected", train=False, decode=True)
+    image_classifier(mode="connected", train=False, decode=True, temp="temp" in sys.argv)
 if "view" in sys.argv:
     image_classifier(mode="connected", train=False, view=True)
 
