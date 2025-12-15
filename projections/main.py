@@ -284,7 +284,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False):
             x = F.relu(self.rfc2(x))
             x = F.relu(self.rfc1(x))
             print(x.shape)
-            x = torch.unflatten(x, -1, (int(self.fig_size / 2), self.red_fig_size, self.red_fig_size))
+            x = torch.unflatten(x, -1, (self.n_chanels*4, self.red_fig_size, self.red_fig_size))
             print(x.shape)
             x = F.relu(self.rconv2(x))
             print(x.shape)
@@ -292,12 +292,19 @@ def image_classifier(mode="connected", train = True, decode=False, view=False):
             print(x.shape)
             return x
 
+    if "mega" in sys.argv:
+        dataset_name = "mega"
+        file_folder = bi.biopython.downloadPDB("../internship/data", "mega-batch",
+                                               file_path="../internship/data/mega-batch20K.txt", file_format="cif",
+                                               overwrite=False)
+    else:
+        dataset_name = "rcps"
+        file_folder = bi.biopython.downloadPDB("../internship/data", "receptors",
+                                               file_path="../internship/data/receptors.txt", file_format="cif",
+                                               overwrite=False)
+
     if train:
 
-        if "mega" in sys.argv:
-            file_folder = bi.biopython.downloadPDB("../internship/data", "mega-batch", file_path="../internship/data/mega-batch20K.txt", file_format="cif", overwrite=False)
-        else:
-            file_folder = bi.biopython.downloadPDB("../internship/data", "receptors", file_path="../internship/data/receptors.txt", file_format="cif", overwrite=False)
 
 
         transform = transforms.Compose(
@@ -466,7 +473,8 @@ def image_classifier(mode="connected", train = True, decode=False, view=False):
 
         print('Finished Training ({} epochs)'.format(epochs))
 
-        PATH = f'./cifar_net_{mode}.pth'
+        PATH = f'./{net.__class__.__name__}_{mode}_{dataset_name}.model.pth'
+
         torch.save(net.state_dict(), PATH)
 
         dataiter = iter(testloader)
@@ -543,8 +551,8 @@ def image_classifier(mode="connected", train = True, decode=False, view=False):
         df.set_index(["cath", "dataset", "mode"], inplace=True, drop=False)
         df.sort_index(level="cath", inplace=True)
 
-        print(df)
-        print("LEXSORTED:", df.index.is_monotonic_increasing, )
+        #print(df)
+        #print("LEXSORTED:", df.index.is_monotonic_increasing, )
 
 
         for classname, correct_count in sorted([(k,v) for k, v in correct_pred.items()], key=lambda x: n_labs[x[0]], reverse=True):
@@ -600,13 +608,14 @@ def image_classifier(mode="connected", train = True, decode=False, view=False):
         for p in to_pred:
             i = torch.Tensor(p)
             print(i.shape)
-            if "-lines" in sys.argv:
-                model_path = f'./cifar_net_lines.pth'
-            elif "-dots" in sys.argv:
-                model_path = f'./cifar_net_projected.pth'
-            else:
-                model_path = f'./cifar_net_connected.pth'
             net = Net(n_features=6, fig_size=128, n_chanels=1)
+            if "-lines" in sys.argv:
+                model_path = f'./{net.__class__.__name__}_lines_{dataset_name}.model.pth'
+            elif "-dots" in sys.argv:
+                model_path = f'./{net.__class__.__name__}_projected_{dataset_name}.model.pth'
+            else:
+                model_path = f'./{net.__class__.__name__}_connected_{dataset_name}.model.pth'
+
             net.load_state_dict(torch.load(model_path, weights_only=True))
             decoded = net.decode(i)
             print("DECODED:")
