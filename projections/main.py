@@ -242,13 +242,19 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
         labs = []
 
         print("DATASET:", file_folder)
-        for file in os.listdir(file_folder):
+        print(f"Curating {len(os.listdir(file_folder))} images...")
+        for n, file in enumerate(os.listdir(file_folder)):
             code = file.split(".")[0]
             l_path = os.path.join("labels", f"{code}.labels.json")
+            print(n, file, end='label: ')
             if os.path.exists(l_path):
                 lab_data = json.load(open(l_path))
                 labs.extend([v["label"] for v in lab_data.values()] )
                 structure_list.append(code)
+                print(l_path)
+            else:
+                print("Not found")
+
         n_labs = {l: labs.count(l) for l in set(labs)}
 
         labs = list(set(labs))
