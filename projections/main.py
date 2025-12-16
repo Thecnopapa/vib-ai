@@ -211,6 +211,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
     from PIL import Image
     from sklearn.model_selection import train_test_split
     from models import Net
+    import torch
 
 
     if "mega" in sys.argv:
