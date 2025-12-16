@@ -259,6 +259,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
 
         class ImageDataset(Dataset):
             def __init__(self, struc_list, folder, label_folder=None):
+                print("Loading data...")
                 self.structures = struc_list
                 self.folder = folder
                 if label_folder is None:
@@ -274,6 +275,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
                     code, chain = name.split("_")
                     if code not in struc_list:
                         continue
+                    print(file, end="\r")
                     l_path = os.path.join(self.label_folder, f"{code}.labels.json")
                     if os.path.exists(l_path):
                         try:
@@ -286,6 +288,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
                 #print(img)
                 self.channels = 1
                 self.image_dims = img.size[0]
+                print(f"Loaded {len(self)} images!")
 
 
 
