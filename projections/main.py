@@ -351,8 +351,8 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
         testset = ImageDataset(test_list, folder=img_folder, label_folder="labels")
 
         from parallel import cpu_count
-        trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=cpu_count)
-        testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=True, num_workers=cpu_count)
+        trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=0)
+        testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=True, num_workers=0)
 
 
         classes = labs
