@@ -251,9 +251,9 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
                 lab_data = json.load(open(l_path))
                 labs.extend([v["label"] for v in lab_data.values()] )
                 structure_list.append(code)
-                print(l_path)
+                print(l_path, end="\r")
             else:
-                print("Not found")
+                print("Not found", end="\r")
 
         n_labs = {l: labs.count(l) for l in set(labs)}
 
