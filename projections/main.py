@@ -534,6 +534,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
             [0, 0, 0, 0, 1, 0],
             [0, 0, 0, 0, 1, 0],
         ]
+        pred_labels = [0, 1, 2, 3, 4, 5]
         preds = []
         n_features = 6
         if "-n" in sys.argv:
@@ -583,6 +584,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
         grid = ImageGrid(fig, 111, nrows_ncols=(2, 3), axes_pad=0.1)
         for ax, im in zip(grid, preds):
             ax.imshow(im)
+        plt.savefig(f"./{net.__class__.__name__}_lines_{dataset_name}_n{len(to_pred[0])}_p{"_".join(str(i) for i in pred_labels)}.png")
         plt.show()
 
 
