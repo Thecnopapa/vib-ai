@@ -9,7 +9,7 @@ import torch.nn.functional as F
 
 
 class Net(nn.Module):
-    def __init__(self, n_features=10, n_chanels=4, fig_size=64):
+    def __init__(self, n_features=10, n_chanels=4, fig_size=64, decode=False):
         super().__init__()
         self.n_features = n_features
         self.n_chanels = n_chanels
@@ -22,7 +22,6 @@ class Net(nn.Module):
         print("KERNELS:", self.kernel1, self.kernel2)
 
         self.conv1 = nn.Conv2d(n_chanels, n_chanels * 2, self.kernel1, stride=1)
-        self.pool = nn.MaxPool2d(2, 2)
         self.conv2 = nn.Conv2d(n_chanels * 2, n_chanels * 4, self.kernel2)
         self.red_fig_size = self.fig_size - self.kernel2 - self.kernel1 + 2
 
@@ -40,7 +39,6 @@ class Net(nn.Module):
         self.rfc1 = nn.Linear(fig_size * 2,
                               int(self.red_fig_size / 2) * n_chanels * 2 * self.red_fig_size * n_chanels * 4)
         self.rconv2 = nn.ConvTranspose2d(n_chanels * 4, n_chanels * 2, self.kernel2)
-        self.rpool = nn.MaxUnpool2d(2, 2)
         self.rconv1 = nn.ConvTranspose2d(n_chanels * 2, n_chanels, self.kernel1, stride=1)
 
     def forward(self, x):
@@ -71,15 +69,15 @@ class Net(nn.Module):
 
     def decode(self, x):
         print(x.shape)
-        x = F.relu(self.rfc3(x))
-        x = F.relu(self.rfc2(x))
-        x = F.relu(self.rfc1(x))
+        x = self.rfc3(x)
+        x = self.rfc2(x)
+        x = self.rfc1(x)
         print(x.shape)
         x = torch.unflatten(x, -1, (self.n_chanels * 4, self.red_fig_size, self.red_fig_size))
         print(x.shape)
-        x = F.relu(self.rconv2(x))
+        x = self.rconv2(x)
         print(x.shape)
-        x = F.relu(self.rconv1(x))
+        x = self.rconv1(x)
         print(x.shape)
         return x
 

@@ -535,59 +535,84 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
 
     if decode:
         import torch
-        to_pred = [
-            [1, 0, 0, 0, 0, 0],
-            [0, 1, 0, 0, 0, 0],
-            [0, 0, 1, 0, 0, 0],
-            [0, 0, 0, 1, 0, 0],
-            [0, 0, 0, 0, 1, 0],
-            [0, 0, 0, 0, 1, 0],
-        ]
-        pred_labels = [0, 1, 2, 3, 4, 5]
-        preds = []
-        n_features = 6
-        if "-n" in sys.argv:
-            n_features = int(sys.argv[sys.argv.index("-n") + 1])
-        if "-p" in sys.argv:
+        with torch.no_grad():
+            to_pred = [
+                [1, 0, 0, 0, 0, 0],
+                [0, 1, 0, 0, 0, 0],
+                [0, 0, 1, 0, 0, 0],
+                [0, 0, 0, 1, 0, 0],
+                [0, 0, 0, 0, 1, 0],
+                [0, 0, 0, 0, 1, 0],
+            ]
+            pred_labels = [0, 1, 2, 3, 4, 5]
+            preds = []
+            n_features = 6
+            if "-n" in sys.argv:
+                n_features = int(sys.argv[sys.argv.index("-n") + 1])
+            if "-p" in sys.argv:
 
-            pred_labels = [int(p) for p in sys.argv[sys.argv.index("-p") + 1].split(",")]
-            to_pred = []
-            for pred_label in pred_labels:
-                to_pred.append([0]*pred_label+[1]+[0]*(n_features-pred_label-1))
-            print(to_pred)
-            print(len(to_pred))
-        for p in to_pred:
-            i = torch.Tensor(p)
-            print(i.shape)
-            net = Net(n_features=n_features, fig_size=128, n_chanels=1)
-            if temp:
-                model_path = "./model.temp.pth"
-            elif "-lines" in sys.argv:
-                model_path = f'./{net.__class__.__name__}_lines_{dataset_name}.model.pth'
-            elif "-dots" in sys.argv:
-                model_path = f'./{net.__class__.__name__}_projected_{dataset_name}.model.pth'
-            else:
-                model_path = f'./{net.__class__.__name__}_connected_{dataset_name}.model.pth'
-            print(model_path)
-            net.load_state_dict(torch.load(model_path, weights_only=True))
-            decoded = net.decode(i)
-            print("DECODED:")
-            print(decoded)
-            print(decoded.shape)
+                pred_labels = [int(p) for p in sys.argv[sys.argv.index("-p") + 1].split(",")]
+                to_pred = []
+                for pred_label in pred_labels:
+                    to_pred.append([0]*pred_label+[1]+[0]*(n_features-pred_label-1))
+                print(to_pred)
+                print(len(to_pred))
+            for p in to_pred:
+                i = torch.Tensor(p)
+                print(i.shape)
+                net = Net(n_features=n_features, fig_size=128, n_chanels=1)
+                if temp:
+                    model_path = "./model.temp.pth"
+                elif "-lines" in sys.argv:
+                    model_path = f'./{net.__class__.__name__}_lines_{dataset_name}.model.pth'
+                elif "-dots" in sys.argv:
+                    model_path = f'./{net.__class__.__name__}_projected_{dataset_name}.model.pth'
+                else:
+                    model_path = f'./{net.__class__.__name__}_connected_{dataset_name}.model.pth'
+                print(model_path)
+                net.load_state_dict(torch.load(model_path, weights_only=True))
+                print(net)
+                for layer in net.named_children():
 
-            print(decoded.shape)
-            decoded = decoded.detach()
-            perm = decoded
-            #perm = perm.permute(0, 1, 2)
-            perm = torch.sigmoid(perm) * 255
-            print(perm)
+                    layer_name = layer[0]
+                    if layer_name.startswith("r"):
+                        continue
+                    print(layer[0])
+                    print(net.conv1)
+                    layer = net.__getattr__(layer_name)
+                    rlayer = net.__getattr__("r" + layer_name)
+                    print(layer.weight.shape)
+                    print(rlayer.weight.shape)
+                    #print(layer.bias)
+                    #print(rlayer.bias)
 
-            print(perm.shape)
-            #plt.imshow(perm[0:2], alpha=perm[3] )
-            #plt.imshow(np.squeeze(decoded.detach().numpy()))
-            #plt.show()
-            img = T.ToPILImage()(perm)
-            preds.append(img)
+                    w = layer.weight.reshape(tuple(rlayer.weight.shape))
+                    #b = layer.bias.reshape(tuple(rlayer.bias.shape))
+                    print(w.shape)
+                    #print(b.shape)
+                    rlayer.weight.copy_(w)
+                    print(rlayer.weight.shape)
+                    #rlayer.bias.copy_(layer.bias)
+                print(net.fc1.weight, net.fc1.weight.shape)
+                print(net.rfc1.weight, net.rfc1.weight.shape)
+                decoded = net.decode(i)
+                print("DECODED:")
+                print(decoded)
+                print(decoded.shape)
+
+                print(decoded.shape)
+                decoded = decoded.detach()
+                perm = decoded
+                #perm = perm.permute(0, 1, 2)
+                #perm = torch.sigmoid(perm) * 255
+                print(perm)
+
+                print(perm.shape)
+                #plt.imshow(perm[0:2], alpha=perm[3] )
+                #plt.imshow(np.squeeze(decoded.detach().numpy()))
+                #plt.show()
+                img = T.ToPILImage()(perm)
+                preds.append(img)
 
         fig = plt.figure(figsize=(12, 8))
         grid = ImageGrid(fig, 111, nrows_ncols=(2, 3), axes_pad=0.1)
