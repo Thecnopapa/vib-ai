@@ -121,6 +121,7 @@ def get_PCA(force=False, labs=True, images=True):
         file_folder = bi.biopython.downloadPDB("../internship/data", "receptors", file_path="../internship/data/receptors.txt", file_format="cif", overwrite=False)
     batches = split_iterable(sorted(os.listdir(file_folder)))
     #[print(b) for b in batches]
+    os.makedirs("labels", exist_ok=True)
     def generate_cath_labels(batch, do_labs, do_images):
         print("STARTING BATCH")
         for file in sorted(batch):
@@ -148,6 +149,8 @@ def get_PCA(force=False, labs=True, images=True):
 
             if not do_images:
                 continue
+            os.makedirs("imgs", exist_ok=True)
+
             for chain in chains:
                 projected_path = f"imgs/projected/{code}_{chain.id}.png"
                 connected_path = f"imgs/connected/{code}_{chain.id}.png"
