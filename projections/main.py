@@ -571,40 +571,49 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
                     model_path = f'./{net.__class__.__name__}_connected_{dataset_name}.model.pth'
                 print(model_path)
                 net.load_state_dict(torch.load(model_path, weights_only=True))
-                print(net)
+                #print(net)
                 for layer in net.named_children():
 
                     layer_name = layer[0]
                     if layer_name.startswith("r"):
                         continue
-                    print(layer[0])
-                    print(net.conv1)
+                    print(layer_name)
                     layer = net.__getattr__(layer_name)
                     rlayer = net.__getattr__("r" + layer_name)
                     print(layer.weight.shape)
                     print(rlayer.weight.shape)
-                    #print(layer.bias)
-                    #print(rlayer.bias)
+                    print(layer.bias.shape)
+                    print(rlayer.bias.shape)
 
                     w = layer.weight.reshape(tuple(rlayer.weight.shape))
                     #b = layer.bias.reshape(tuple(rlayer.bias.shape))
-                    print(w.shape)
+                    #print(w.shape)
                     #print(b.shape)
                     rlayer.weight.copy_(w)
-                    print(rlayer.weight.shape)
-                    #rlayer.bias.copy_(layer.bias)
-                print(net.fc1.weight, net.fc1.weight.shape)
-                print(net.rfc1.weight, net.rfc1.weight.shape)
+                    #print(rlayer.weight.shape)
+                    rlayer._bias = layer.bias
+                    rlayer.bias = None
+                #print(net.fc1.weight, net.fc1.weight.shape)
+                #print(net.rfc1.weight, net.rfc1.weight.shape)
+                print("DECODING...")
                 decoded = net.decode(i)
-                print("DECODED:")
-                print(decoded)
-                print(decoded.shape)
+                #print(decoded)
+                #print(decoded.shape)
 
-                print(decoded.shape)
+                #print(decoded.shape)
                 decoded = decoded.detach()
                 perm = decoded
+                normalise = transforms.Compose(
+                    [
+                        # transforms.ToTensor(),
+                        # transforms.Resize((64,64)),
+                        transforms.Normalize((0), (0.1))
+                     ])
+                perm = normalise(perm)
                 #perm = perm.permute(0, 1, 2)
                 #perm = torch.sigmoid(perm) * 255
+                #perm = perm *100000
+                print("DECODED:")
                 print(perm)
 
                 print(perm.shape)
