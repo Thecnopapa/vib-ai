@@ -8,7 +8,6 @@ import setup
 setup.init()
 from setup import bioiain, bi, config, log_file
 
-from bioiain.biopython.DSSP import index_to_ss
 
 
 
@@ -345,6 +344,7 @@ if predict:
 
     def predict(details):
         import torch
+        from bioiain.tools.DSSP import index_to_ss
         # INPUT READY
         bi.log("header", "Input received!")
         print(json.dumps(details, indent=4))
