@@ -1,3 +1,12 @@
+
+if __name__ == '__main__':
+    import bioiain
+    import bioiain as bi
+    config={}
+
+
+
+
 import json, os, sys, datetime
 now = datetime.datetime.now()
 os.makedirs("logs", exist_ok=True)

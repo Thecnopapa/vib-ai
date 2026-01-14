@@ -344,7 +344,7 @@ if predict:
 
     def predict(details):
         import torch
-        from bioiain.tools.DSSP import index_to_ss
+        from bioiain.tools.DSSP import index_to_ss, run_dssp
         # INPUT READY
         bi.log("header", "Input received!")
         print(json.dumps(details, indent=4))
