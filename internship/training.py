@@ -3,7 +3,7 @@ import os, sys, subprocess, json
 import numpy as np
 
 from setup import bioiain, bi, config
-from bioiain.biopython.DSSP import ss_to_index
+from bioiain.tools.DSSP import ss_to_index
 
 import torch
 import torch.nn as nn
@@ -74,7 +74,7 @@ class ResidueDataset(Dataset):
 
 def split_sample(array, folder, label_folder=None, test_ratio=0.2):
 
-    bi.log(1, "splitting...")
+    bi.log(1, f"splitting... (array_len={len(array)})")
     # Split into train/test
     train_list, test_list = train_test_split(array, test_size=test_ratio, random_state=42)
 
@@ -96,6 +96,9 @@ def split_sample(array, folder, label_folder=None, test_ratio=0.2):
 
 def train_mlp(model, train_loader, test_loader, lr=1e-3, epochs=20):
     bi.log(1, "Training MLP...")
+    import torch
+    from torch.utils.tensorboard import SummaryWriter
+    writer = SummaryWriter()
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     device = "cpu"
     model.to(device)
@@ -115,6 +118,9 @@ def train_mlp(model, train_loader, test_loader, lr=1e-3, epochs=20):
             optimizer.zero_grad()
             logits = model(X_batch)
             loss = criterion(logits, y_batch)
+
+
+            writer.add_scalar("Loss/train", loss, epoch)
             loss.backward()
             optimizer.step()
 

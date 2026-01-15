@@ -376,6 +376,9 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
         net = Net(len(labs), n_chanels=trainset.channels, fig_size=trainset.image_dims)
 
         import torch.optim as optim
+        import torch
+        from torch.utils.tensorboard import SummaryWriter
+        writer = SummaryWriter()
 
         criterion = nn.CrossEntropyLoss()
         optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
@@ -403,6 +406,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
                 #print(outputs)
                 #print(labels)
                 loss = criterion(outputs, labels)
+                writer.add_scalar("Loss/train", loss, epoch)
                 loss.backward()
                 optimizer.step()
 

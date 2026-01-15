@@ -222,6 +222,7 @@ internship/labels
 internship/bin/foldseek
 internship/bin/dssp
 internship/.temp
+internship/runs
 
 projections/data
 projections/imgs
@@ -229,12 +230,14 @@ projections/exports
 projections/labels
 projections/headers
 projections/dataframes
+projections/runs
 
 
 pisa/*.xml
 pisa/*.cif
 pisa/pisa_raw
 pisa/pisa_data
+
 
 
 config.custom.json

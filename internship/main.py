@@ -196,6 +196,7 @@ if train:
         exit()
 
     bi.log(2, "Embedding folder:", embedding_folder)
+    os.makedirs(embedding_folder, exist_ok=True)
     try:
         config["training"]["selected_label"] = config["labels"]["selected"]
         label_folder =  config["training"]["selected_label"]["save_folder"]
@@ -204,6 +205,7 @@ if train:
         exit()
 
     bi.log(2, "Label folder:", label_folder)
+    os.makedirs(label_folder, exist_ok=True)
 
 
 

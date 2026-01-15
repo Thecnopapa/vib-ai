@@ -2,7 +2,7 @@
 
 import os, sys, subprocess, json
 
-from bioiain.biopython import ss_to_index
+from bioiain.tools.DSSP import ss_to_index
 
 from setup import config, bi, bioiain
 
