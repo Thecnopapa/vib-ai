@@ -435,6 +435,8 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
                 # zero the parameter gradients
                 optimizer.zero_grad()
 
+
+
                 # forward + backward + optimize
                 outputs = net(inputs)
                 #print(outputs.shape)
@@ -449,6 +451,9 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
 
                 # print statistics
                 running_loss += loss.item()
+                if i < 4:
+                    #print(net.last_decode)
+                    writer.add_image(f"output/train ({i})", net.last_decode[0], epoch)
                 writer.add_scalar("Loss/train", running_loss, epoch)
                 if i % 10 == 9:  # print every 1000 mini-batches
                     print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / 10:.3f}', end = "\r")
