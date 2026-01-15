@@ -16,13 +16,14 @@ class SmallNet(nn.Module):
         print("FIG_SIZE", self.fig_size)
         print("N_CHANNELS =", n_chanels)
         assert fig_size % 32 == 0
-        self.kernel1 = 4
+        self.kernel1 = 5
         self.kernel2 = 4
         print("KERNELS:", self.kernel1, self.kernel2)
 
-        self.conv1 = nn.Conv2d(n_chanels, n_chanels * 2, self.kernel1, stride=1)
-        self.conv2 = nn.Conv2d(n_chanels * 2, n_chanels * 4, self.kernel2)
-        self.red_fig_size = self.fig_size - self.kernel2 - self.kernel1 + 2
+        self.conv1 = nn.Conv2d(n_chanels, n_chanels * 2, self.kernel1, stride=2)
+        self.conv2 = nn.Conv2d(n_chanels * 2, n_chanels * 4, self.kernel2, stride=2)
+        #self.red_fig_size = self.fig_size - self.kernel2 - self.kernel1 +
+        self.red_fig_size = 30
 
         print("RED_FIG_SIZE =", self.red_fig_size)
         assert self.red_fig_size % 2 == 0

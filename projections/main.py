@@ -213,9 +213,13 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
     from torch.utils.data import Dataset
     from PIL import Image
     from sklearn.model_selection import train_test_split
-    from models import Net
+    from models import Net as M
     import torch
     import torch.nn as nn
+
+    if "small" in sys.argv:
+        from models import SmallNet
+        M = SmallNet
 
     if "mega" in sys.argv:
         dataset_name = "mega"
@@ -307,7 +311,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
 
 
 
-            def __getitem__(self, idx):
+            def __getitem__(self, idx, as_image=False):
                 fname = self.images[idx]
                 name = os.path.basename(fname).split(".")[0]
                 code, ch = name.split("_")
@@ -315,9 +319,15 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
                 i_path = os.path.join(self.folder, fname)
                 l_path = os.path.join(self.label_folder, f"{code}.labels.json")
 
+                label = label_to_index[json.load(open(l_path))[ch]["label"].lower().strip()]
+
+
                 image = Image.open(i_path)
                 #image = image.convert("RGB")
+                if as_image:
+                    return image, label
                 image = transform(image)#[-1]#.resize((1,self.image_dims,self.image_dims))
+
                 #print(image)
                 #print(image.shape)
                 if False:
@@ -336,9 +346,9 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
 
                 image = image[-1]
 
-                label = label_to_index[json.load(open(l_path))[ch]["label"].lower().strip()]
 
                 # print("emb:", emb.shape, "lab:", lab)
+
                 return image, label
 
 
@@ -366,19 +376,46 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
         trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=0)
         testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=True, num_workers=0)
 
-
         classes = labs
 
+        from torch.utils.tensorboard import SummaryWriter
+        writer = SummaryWriter()
+
+        def matplotlib_imshow(img, one_channel=False):
+            if one_channel:
+                img = img.mean(dim=0)
+            img = img / 2 + 0.5  # unnormalize
+            npimg = img.numpy()
+            if one_channel:
+                plt.imshow(npimg, cmap="Greys")
+            else:
+                plt.imshow(np.transpose(npimg, (1, 2, 0)))
+        import torchvision
+        images = np.array([[trainset.__getitem__(x, as_image=False)[0].numpy()] for x in range(4)])
+        print(images)
+        labels = [trainset[x][1] for x in range(4)]
+
+
+        # create grid of images
+        #img_grid = torchvision.utils.make_grid(images)
+
+        # show images
+        #matplotlib_imshow(img_grid, one_channel=False)
+
+        # write to tensorboard
+        #print(images, labels)
+        for n, (lab, img) in enumerate(zip(labels, images)):
+            #print(lab, img.shape)
+            writer.add_image(f"input/train ({n})", torch.Tensor(img) )
 
 
 
 
-        net = Net(len(labs), n_chanels=trainset.channels, fig_size=trainset.image_dims)
+        net = M(len(labs), n_chanels=trainset.channels, fig_size=trainset.image_dims)
 
         import torch.optim as optim
         import torch
-        from torch.utils.tensorboard import SummaryWriter
-        writer = SummaryWriter()
+
 
         criterion = nn.CrossEntropyLoss()
         optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
@@ -406,12 +443,13 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
                 #print(outputs)
                 #print(labels)
                 loss = criterion(outputs, labels)
-                writer.add_scalar("Loss/train", loss, epoch)
+
                 loss.backward()
                 optimizer.step()
 
                 # print statistics
                 running_loss += loss.item()
+                writer.add_scalar("Loss/train", running_loss, epoch)
                 if i % 10 == 9:  # print every 1000 mini-batches
                     print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / 10:.3f}', end = "\r")
                     running_loss = 0.0
@@ -426,7 +464,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
         images, labels = next(dataiter)
 
 
-        net = Net(n_features = len(labs), n_chanels=trainset.channels, fig_size=trainset.image_dims)
+        net = M(n_features = len(labs), n_chanels=trainset.channels, fig_size=trainset.image_dims)
         net.load_state_dict(torch.load(PATH, weights_only=True))
 
         outputs = net(images)
@@ -532,7 +570,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
 
     if view:
         from torchview import draw_graph
-        model_graph = draw_graph(Net(n_features=6, fig_size=128, n_chanels=1), input_size=(1, 1, 128, 128),
+        model_graph = draw_graph(M(n_features=6, fig_size=128, n_chanels=1), input_size=(1, 1, 128, 128),
                                  expand_nested=True,
                                  graph_name="graph_1",
                                  save_graph=True,
@@ -567,7 +605,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
             for p in to_pred:
                 i = torch.Tensor(p)
                 print(i.shape)
-                net = Net(n_features=n_features, fig_size=128, n_chanels=1)
+                net = M(n_features=n_features, fig_size=128, n_chanels=1)
                 if temp:
                     model_path = "./model.temp.pth"
                 elif "-lines" in sys.argv:
