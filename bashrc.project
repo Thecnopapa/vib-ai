@@ -220,3 +220,7 @@ test(){
 clock(){
   cloc --include-lang=Python --by-file-by-lang .
 }
+board(){
+  echo -en "\"\033]0;TensorBoard\a\""
+  tensorboard --logdir=runs & xdg-open "http://localhost:6006/"
+}

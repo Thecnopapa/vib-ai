@@ -232,15 +232,14 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
                                                file_path="../internship/data/receptors.txt", file_format="cif",
                                                overwrite=False)
 
+    transform = transforms.Compose(
+        [transforms.ToTensor(),
+         # transforms.Resize((64,64)),
+         # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+         ])
+
     if train:
 
-
-
-        transform = transforms.Compose(
-            [transforms.ToTensor(),
-             #transforms.Resize((64,64)),
-             #transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-             ])
 
         structure_list = []
 
@@ -266,8 +265,8 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
 
         labs = list(set(labs))
         for n, l in enumerate(labs):
-            label_to_index[l] = n
-            index_to_label[n] = l
+            label_to_index[str(l)] = int(n)
+            index_to_label[int(n)] = str(l)
 
 
         class ImageDataset(Dataset):
@@ -412,6 +411,18 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
 
 
         net = M(len(labs), n_chanels=trainset.channels, fig_size=trainset.image_dims)
+        data = {}
+        data["model_name"] = f"{net.__class__.__name__}_{mode}_{dataset_name}"
+        data["name"] = str(net.__class__.__name__)
+        data["mode"] = str(mode)
+        data["dataset"] = str(dataset_name)
+        data["label_to_index"] = dict(label_to_index)
+        data["index_to_label"] = dict(index_to_label)
+        data["n_features"] = len(labs)
+        data["n_channels"]=int(trainset.channels)
+        data["fig_size"]=int(trainset.image_dims)
+        with open(data["model_name"]+".model.data.json", "w") as f:
+            json.dump(data, f, indent=4)
 
         import torch.optim as optim
         import torch
@@ -423,14 +434,16 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
         for epoch in range(epochs):  # loop over the dataset multiple times
             print("EPOCH: ", epoch, end="\r")
             torch.save(net.state_dict(), "./model.temp.pth")
+            with open("./model.temp.data.json", "w") as f:
+                json.dump(data, f, indent=4)
             if epoch//5 == 0:
                 #image_classifier(train=False, decode=True, temp=True)
                 pass
 
             running_loss = 0.0
-            for i, data in enumerate(trainloader, 0):
+            for i, d in enumerate(trainloader, 0):
                 # get the inputs; data is a list of [inputs, labels]
-                inputs, labels = data
+                inputs, labels = d
 
                 # zero the parameter gradients
                 optimizer.zero_grad()
@@ -451,13 +464,26 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
 
                 # print statistics
                 running_loss += loss.item()
-                if i < 4:
-                    #print(net.last_decode)
-                    writer.add_image(f"output/train ({i})", net.last_decode[0], epoch)
-                writer.add_scalar("Loss/train", running_loss, epoch)
+                #if i < 4:
+                #    #print(net.last_decode)
+                #    #writer.add_image(f"output/train ({i})", net.last_decode[0], epoch)
+
                 if i % 10 == 9:  # print every 1000 mini-batches
                     print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / 10:.3f}', end = "\r")
+                    writer.add_scalar("Loss/train", running_loss, epoch)
                     running_loss = 0.0
+
+            with torch.no_grad():
+                for i_name in ["1M2Z_A"]:
+                    i_path = f"imgs/{mode}/{i_name}.png"
+                    image = Image.open(i_path)
+                    image = transform(image)
+                    image = torch.Tensor(np.array([image[-1]]))
+                    bits = net.forward(image)
+                    dec = net.decode(bits)[0]
+                    #dec = transforms.functional.to_pil_image(dec, mode=None)
+                    writer.add_image(f"test/in ({i_name})", image, epoch)
+                    writer.add_image(f"test/out ({i_name})", dec, epoch)
 
         print('Finished Training ({} epochs)'.format(epochs))
 
@@ -586,97 +612,68 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
     if decode:
         import torch
         with torch.no_grad():
-            to_pred = [
-                [1, 0, 0, 0, 0, 0],
-                [0, 1, 0, 0, 0, 0],
-                [0, 0, 1, 0, 0, 0],
-                [0, 0, 0, 1, 0, 0],
-                [0, 0, 0, 0, 1, 0],
-                [0, 0, 0, 0, 1, 0],
-            ]
-            pred_labels = [0, 1, 2, 3, 4, 5]
-            preds = []
-            n_features = 6
-            if "-n" in sys.argv:
-                n_features = int(sys.argv[sys.argv.index("-n") + 1])
-            if "-p" in sys.argv:
+            if temp:
+                model_path = "./model.temp.pth"
+            elif "-lines" in sys.argv:
+                mode="lines"
+            elif "-dots" in sys.argv:
+                mode="projected"
+            else:
+                mode = "connected"
+            model_path = f"SmallNet_{mode}_{dataset_name}.model.pth"
+            print(model_path)
+            model_data = json.load(open(model_path.split(".")[0] + ".model.data.json"))
 
-                pred_labels = [int(p) for p in sys.argv[sys.argv.index("-p") + 1].split(",")]
-                to_pred = []
-                for pred_label in pred_labels:
-                    to_pred.append([0]*pred_label+[1]+[0]*(n_features-pred_label-1))
+            n_features = model_data["n_features"]
+            net = M(n_features=n_features, fig_size=model_data["fig_size"], n_chanels=model_data["n_channels"])
+
+            print("N FEATURES:", n_features)
+            print(model_data["index_to_label"])
+            for n in range(n_features):
+                print(" - ", n, model_data["index_to_label"][str(n)])
+            net.load_state_dict(torch.load(model_path, weights_only=True))
+
+            to_pred = []
+            pred_labels = []
+            preds = []
+            decodes = []
+            to_dec = []
+
+            if "-c" in sys.argv:
+                codes = [p for p in sys.argv[sys.argv.index("-c") + 1].split(",")]
+                for code in codes:
+                    i_path = f"imgs/{mode}/{code}.png"
+                    image = Image.open(i_path)
+                    image = transform(image)
+                    print(image[-1])
+                    image = torch.Tensor(np.array([image[-1]]))
+                    print(image)
+                    bits = net.forward(image)
+                    to_pred.append(bits)
+                    to_dec.append(bits)
+
+
                 print(to_pred)
                 print(len(to_pred))
-            for p in to_pred:
+            for p, d in zip(to_pred, to_dec):
                 i = torch.Tensor(p)
                 print(i.shape)
-                net = M(n_features=n_features, fig_size=128, n_chanels=1)
-                if temp:
-                    model_path = "./model.temp.pth"
-                elif "-lines" in sys.argv:
-                    model_path = f'./{net.__class__.__name__}_lines_{dataset_name}.model.pth'
-                elif "-dots" in sys.argv:
-                    model_path = f'./{net.__class__.__name__}_projected_{dataset_name}.model.pth'
-                else:
-                    model_path = f'./{net.__class__.__name__}_connected_{dataset_name}.model.pth'
-                print(model_path)
-                net.load_state_dict(torch.load(model_path, weights_only=True))
-                #print(net)
-                for layer in net.named_children():
 
-                    layer_name = layer[0]
-                    if layer_name.startswith("r"):
-                        continue
-                    print(layer_name)
-                    layer = net.__getattr__(layer_name)
-                    rlayer = net.__getattr__("r" + layer_name)
-                    print(layer.weight.shape)
-                    print(rlayer.weight.shape)
-                    print(layer.bias.shape)
-                    print(rlayer.bias.shape)
 
-                    w = layer.weight.reshape(tuple(rlayer.weight.shape))
-                    #b = layer.bias.reshape(tuple(rlayer.bias.shape))
-                    #print(w.shape)
-                    #print(b.shape)
-                    rlayer.weight.copy_(w)
-                    #print(rlayer.weight.shape)
-                    rlayer._bias = layer.bias
-                    rlayer.bias = None
-                #print(net.fc1.weight, net.fc1.weight.shape)
-                #print(net.rfc1.weight, net.rfc1.weight.shape)
-                print("DECODING...")
-                decoded = net.decode(i)
-                #print(decoded)
-                #print(decoded.shape)
+                preds.append(model_data["index_to_label"][str(torch.max(p, 1).indices[0].numpy())])
+                print("PRED:", preds[-1])
+                dec = net.decode(d)[0]
+                print(dec)
+                print(dec.shape)
+                dec = transforms.functional.to_pil_image(dec, mode=None)
 
-                #print(decoded.shape)
-                decoded = decoded.detach()
-                perm = decoded
-                normalise = transforms.Compose(
-                    [
-                        # transforms.ToTensor(),
-                        # transforms.Resize((64,64)),
-                        transforms.Normalize((0), (0.1))
-                     ])
-                perm = normalise(perm)
-                #perm = perm.permute(0, 1, 2)
-                #perm = torch.sigmoid(perm) * 255
-                #perm = perm *100000
-                print("DECODED:")
-                print(perm)
+                decodes.append(dec)
+                print(decodes[-1])
+                plt.imshow(dec)
+                plt.show()
 
-                print(perm.shape)
-                #plt.imshow(perm[0:2], alpha=perm[3] )
-                #plt.imshow(np.squeeze(decoded.detach().numpy()))
-                #plt.show()
-                img = T.ToPILImage()(perm)
-                preds.append(img)
 
-        fig = plt.figure(figsize=(12, 8))
-        grid = ImageGrid(fig, 111, nrows_ncols=(2, 3), axes_pad=0.1)
-        for ax, im in zip(grid, preds):
-            ax.imshow(im)
+
         plt.savefig(f"./{net.__class__.__name__}_lines_{dataset_name}_n{len(to_pred[0])}_p{"_".join(str(i) for i in pred_labels)}.png")
         plt.show()
 

@@ -69,35 +69,14 @@ class SmallNet(nn.Module):
         return x
 
     def decode(self, x):
-        #print(x)
-        #x = x * self.rfc3._bias
-        #print(x)
-        x = self.rfc3(x)
-        #x = x * self.rfc2._bias
-        #(x)
-        x = self.rfc2(x)
-        #x = x * self.rfc1._bias
-        #print(x)
-        x = self.rfc1(x)
-        #print(x.shape)
-        x = torch.unflatten(x, -1, (self.n_chanels * 4, self.red_fig_size, self.red_fig_size))
-        #print(x)
-        #print(x.shape)
-        #for n, (t, b) in enumerate(zip(x, self.rconv2._bias)):
-        #    x[n] = t * b
-        #print(x.shape)
-        #print(x)
 
+        x = self.rfc3(x)
+        x = self.rfc2(x)
+        x = self.rfc1(x)
+        x = torch.unflatten(x, -1, (self.n_chanels * 4, self.red_fig_size, self.red_fig_size))
         x = self.rconv2(x)
-        #print(x)
-        #print(x.shape)
-        #for n, (t, b) in enumerate(zip(x, self.rconv1._bias)):
-        #    x[n] = t * b
-        #print(x.shape)
-        #print(x)
         x = self.rconv1(x)
-        #print(x.shape)
-        self.last_decode=x
+        self.last_decode = x
         return x
 
 
