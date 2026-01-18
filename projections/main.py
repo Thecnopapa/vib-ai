@@ -150,104 +150,68 @@ def get_PCA(force=False, labs=True, images=True):
             if not do_images:
                 continue
             os.makedirs("imgs", exist_ok=True)
-            if code not in ["1M2Z", "1P93"]:
-                continue
+            #if code not in ["1M2Z", "1P93"]:
+            #    continue
             for chain in chains:
                 projected_path = f"imgs/projected/{code}_{chain.id}.png"
                 connected_path = f"imgs/connected/{code}_{chain.id}.png"
-                lines_path = f"imgs/lines/{code}_{chain.id}.png"
-                pca_path = f"imgs/pca/{code}_{chain.id}.png"
-                paths = (projected_path, connected_path, lines_path)
+                double_path = f"imgs/double/{code}_{chain.id}.png"
+                double_connected_path = f"imgs/double_connected/{code}_{chain.id}.png"
+                paths = (projected_path, connected_path, double_path, double_connected_path)
 
                 if any([not os.path.exists(p) for p in paths]) or force:
-                    coords = [a.coord for a in chain.get_atoms() if a.id == "CA"]
-                    if len(coords) < 10:
-                        continue
 
+                    coords = [a.coord for a in chain.get_atoms() if a.id == "CA"]
+                    if len(coords) < 5:
+                        continue
+                    for p in paths:
+                        os.makedirs(os.path.dirname(p), exist_ok=True)
 
                     pca = PCA(n_components=3, random_state=6)
                     pca.fit(coords)
 
-                    variance = pca.explained_variance_
-                    components = pca.components_
-                    pca.explained_variance_ = variance#[::-1]
-                    pca.components_ = components#[::-1]
-                    print(pca.components_)
-                    print(pca.explained_variance_)
                     projected = pca.transform(coords)
-                    #flat = list(zip(oriented[:, 0], oriented[:, 1]))
-                    pca2 = PCA(n_components=3)
-                    pca2.fit(projected)
-                    print(pca2.components_)
-                    print(pca2.explained_variance_)
-                    #projected = pca.transform(flat)
-                    print(projected.shape)
 
 
-                if (not os.path.exists(projected_path)) or (not os.path.exists(projected_path)) or force :
+                    # Single Projected
+            
                     fig = plt.figure(figsize=(1.28,1.28))
                     ax = fig.add_subplot(111)
-
-                    ax.scatter(projected[:, 0], projected[:, 1], c="#00000050", marker=".")
                     ax.set_aspect("equal")
-                    ax.axis('off')
-                    os.makedirs("imgs/pca", exist_ok=True)
-                    os.makedirs("imgs/projected", exist_ok=True)
-                    os.makedirs("imgs/connected", exist_ok=True)
-                    os.makedirs("imgs/lines", exist_ok=True)
-                    os.makedirs("labels", exist_ok=True)
-
-
+                    ax.axis("off")
+                    
+                    ax.scatter(projected[:, 0], projected[:, 1], c="#00000050", marker=".")
 
                     fig.savefig(projected_path, transparent=True)
+
+                    # Single connected
 
                     for i in range(len(projected)-1):
                         ax.plot(projected[i:i+2, 0], projected[i:i+2, 1], color="#00000050")
                     fig.savefig(connected_path, transparent=True)
 
                     plt.close(fig)
+                    
 
-
+                    # Double Projected
 
                     fig = plt.figure(figsize=(1.28, 1.28))
                     ax = fig.add_subplot(111)
                     ax.set_aspect("equal")
                     ax.axis('off')
+
                     ax.scatter(projected[:, 0], projected[:, 1], c="#00000025", marker=".")
                     ax.scatter(np.array(projected[:, 0])*-1, np.array(projected[:, 1])*-1, c="#00000025", marker=".")
 
-                    #ax.scatter(np.array(coords)[:, 0], np.array(coords)[:, 1], c="#00000050", marker=".")
 
-                    # for comp in pca.components_:
-                    # ax.plot([0, pca2.components_[0, 0] * pca2.explained_variance_[0]],
-                    #         [0, pca2.components_[0, 1] * pca2.explained_variance_[0]], color="red")
-                    # ax.plot([0, pca2.components_[1, 0] * pca2.explained_variance_[1]],
-                    #         [0, pca2.components_[1, 1] * pca2.explained_variance_[1]], color="green")
-                    # ax.plot([0, pca2.components_[2, 0] * pca2.explained_variance_[2]],
-                    #         [0, pca2.components_[2, 1] * pca2.explained_variance_[2]], color="blue")
+                    fig.savefig(double_path, transparent=True)
+                    
 
-                    com2 = find_com(coords)
-
-                    #ax.plot([com2[0], com2[0]+pca.components_[0, 0] * pca.explained_variance_[0]],
-                    #        [com2[0], com2[0]+pca.components_[0, 1] * pca.explained_variance_[0]], color="red")
-                    #ax.plot([com2[1], com2[1]+pca.components_[1, 0] * pca.explained_variance_[1]],
-                    #        [com2[1], com2[1]+pca.components_[1, 1] * pca.explained_variance_[1]], color="green")
-                    #ax.plot([com2[2], com2[2]+pca.components_[2, 0] * pca.explained_variance_[2]],
-                    #        [com2[2], com2[2]+pca.components_[2, 1] * pca.explained_variance_[2]], color="blue")
-
-                    fig.savefig(pca_path, transparent=True)
-                    plt.close(fig)
-
-
-
-                if (not os.path.exists(lines_path)) or force:
-                    fig = plt.figure(figsize=(1.28, 1.28))
-                    ax = fig.add_subplot(111)
-                    ax.set_aspect("equal")
-                    ax.axis('off')
+                    # Double Connected 
                     for i in range(len(projected)-1):
-                        ax.plot(projected[i:i+2, 0], projected[i:i+2, 1], color="#00000050")
-                    fig.savefig(lines_path, transparent=True)
+                        ax.plot(projected[i:i+2, 0], projected[i:i+2, 1], color="#00000025")
+                        ax.plot(np.array(projected[i:i+2, 0])*-1, np.array(projected[i:i+2, 1])*-1, color="#00000025")
+                    fig.savefig(double_connected_path, transparent=True)
                     plt.close(fig)
 
     pool = ThreadPool()
