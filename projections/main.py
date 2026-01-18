@@ -708,7 +708,7 @@ if "-t" in sys.argv:
     elif "-dots" in sys.argv:
         image_classifier(mode="projected")
     else:
-        image_classifier(mode="connected")
+        image_classifier(mode="double")
 if "decode" in sys.argv:
     image_classifier(mode="connected", train=False, decode=True, temp="temp" in sys.argv)
 if "view" in sys.argv:

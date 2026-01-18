@@ -222,5 +222,6 @@ clock(){
 }
 board(){
   echo -en "\"\033]0;TensorBoard\a\""
+  echo "tensorboard --logdir=runs"
   tensorboard --logdir=runs & xdg-open "http://localhost:6006/"
 }
