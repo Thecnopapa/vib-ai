@@ -174,12 +174,12 @@ def get_PCA(force=False, labs=True, images=True):
 
 
                     # Single Projected
-            
+
                     fig = plt.figure(figsize=(1.28,1.28))
                     ax = fig.add_subplot(111)
                     ax.set_aspect("equal")
                     ax.axis("off")
-                    
+
                     ax.scatter(projected[:, 0], projected[:, 1], c="#00000050", marker=".")
 
                     fig.savefig(projected_path, transparent=True)
@@ -191,7 +191,7 @@ def get_PCA(force=False, labs=True, images=True):
                     fig.savefig(connected_path, transparent=True)
 
                     plt.close(fig)
-                    
+
 
                     # Double Projected
 
@@ -205,9 +205,9 @@ def get_PCA(force=False, labs=True, images=True):
 
 
                     fig.savefig(double_path, transparent=True)
-                    
 
-                    # Double Connected 
+
+                    # Double Connected
                     for i in range(len(projected)-1):
                         ax.plot(projected[i:i+2, 0], projected[i:i+2, 1], color="#00000025")
                         ax.plot(np.array(projected[i:i+2, 0])*-1, np.array(projected[i:i+2, 1])*-1, color="#00000025")
@@ -223,7 +223,7 @@ def get_PCA(force=False, labs=True, images=True):
 
 
 
-def image_classifier(mode="connected", train = True, decode=False, view=False, temp=False):
+def image_classifier(mode="double_connected", train = True, decode=False, view=False, temp=False):
     import torchvision.transforms as transforms
     from torch.utils.data import Dataset
     from PIL import Image
@@ -267,13 +267,14 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
         for n, file in enumerate(os.listdir(file_folder)):
             code = file.split(".")[0]
             l_path = os.path.join("labels", f"{code}.labels.json")
-            print(n, file, end='label: ')
+            #print(n, file, end=' label: ')
             if os.path.exists(l_path):
                 lab_data = json.load(open(l_path))
                 labs.extend([v["label"] for v in lab_data.values()] )
                 structure_list.append(code)
-                print(l_path, end="\r")
+                #print(l_path, end="\r")
             else:
+                print(n, file, end=' label: ')
                 print("Not found", end="\r")
 
         n_labs = {l: labs.count(l) for l in set(labs)}
@@ -302,7 +303,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
                     code, chain = name.split("_")
                     if code not in struc_list:
                         continue
-                    print(file, end="\r")
+                    #print(file, end="\r")
                     l_path = os.path.join(self.label_folder, f"{code}.labels.json")
                     if os.path.exists(l_path):
                         try:
@@ -406,7 +407,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
                 plt.imshow(np.transpose(npimg, (1, 2, 0)))
         import torchvision
         images = np.array([[trainset.__getitem__(x, as_image=False)[0].numpy()] for x in range(4)])
-        print(images)
+        #print(images)
         labels = [trainset[x][1] for x in range(4)]
 
 
@@ -445,7 +446,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
 
         criterion = nn.CrossEntropyLoss()
         optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
-        epochs = 20
+        epochs = 13
         for epoch in range(epochs):  # loop over the dataset multiple times
             print("EPOCH: ", epoch, end="\r")
             torch.save(net.state_dict(), "./model.temp.pth")
@@ -483,7 +484,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
                 #    #print(net.last_decode)
                 #    #writer.add_image(f"output/train ({i})", net.last_decode[0], epoch)
 
-                if i % 10 == 9:  # print every 1000 mini-batches
+                if i % 100 == 99:  # print every 1000 mini-batches
                     print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / 10:.3f}', end = "\r")
                     writer.add_scalar("Loss/train", running_loss, epoch)
                     running_loss = 0.0
@@ -708,7 +709,7 @@ if "-t" in sys.argv:
     elif "-dots" in sys.argv:
         image_classifier(mode="projected")
     else:
-        image_classifier(mode="double")
+        image_classifier(mode="double_connected")
 if "decode" in sys.argv:
     image_classifier(mode="connected", train=False, decode=True, temp="temp" in sys.argv)
 if "view" in sys.argv:
