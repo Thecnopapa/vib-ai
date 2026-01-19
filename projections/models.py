@@ -17,11 +17,13 @@ class SmallNet(nn.Module):
         print("N_CHANNELS =", n_chanels)
         assert fig_size % 32 == 0
         self.kernel1 = 5
+        self.stride1 = 2
         self.kernel2 = 4
+        self.stride2 = 2
         print("KERNELS:", self.kernel1, self.kernel2)
 
-        self.conv1 = nn.Conv2d(n_chanels, n_chanels * 2, self.kernel1, stride=2)
-        self.conv2 = nn.Conv2d(n_chanels * 2, n_chanels * 4, self.kernel2, stride=2)
+        self.conv1 = nn.Conv2d(n_chanels, n_chanels * 2, self.kernel1, stride=self.stride1)
+        self.conv2 = nn.Conv2d(n_chanels * 2, n_chanels * 4, self.kernel2, stride=self.stride2)
         #self.red_fig_size = self.fig_size - self.kernel2 - self.kernel1 +
         self.red_fig_size = 30
 
@@ -38,8 +40,8 @@ class SmallNet(nn.Module):
         self.rfc2 = nn.Linear(fig_size, fig_size * 2)
         self.rfc1 = nn.Linear(fig_size * 2,
                               int(self.red_fig_size / 2) * n_chanels * 2 * self.red_fig_size * n_chanels * 4)
-        self.rconv2 = nn.ConvTranspose2d(n_chanels * 4, n_chanels * 2, self.kernel2)
-        self.rconv1 = nn.ConvTranspose2d(n_chanels * 2, n_chanels, self.kernel1, stride=1)
+        self.rconv2 = nn.ConvTranspose2d(n_chanels * 4, n_chanels * 2, self.kernel2, stride=self.stride2)
+        self.rconv1 = nn.ConvTranspose2d(n_chanels * 2, n_chanels, self.kernel1, stride=self.stride1)
 
     def forward(self, x):
         # [4, n_channels, 32, 32] / [4, n_channels, 100, 100]

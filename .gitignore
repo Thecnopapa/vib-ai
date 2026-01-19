@@ -231,6 +231,7 @@ projections/labels
 projections/headers
 projections/dataframes
 projections/runs
+projections/figs
 
 
 pisa/*.xml

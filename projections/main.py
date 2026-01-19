@@ -12,6 +12,8 @@ import torchvision.transforms as T
 from mpl_toolkits.axes_grid1 import ImageGrid
 
 from parallel import *
+sys.path.append('..')
+
 
 
 def get_family_desc(fam, cath_folder="cath"):
@@ -110,6 +112,14 @@ def cath_to_label(name, structure, label_folder="labels", force=False ):
 
 
 def get_PCA(force=False, labs=True, images=True):
+    if labs and images:
+        print("\033]0;Generating labels and embeddings\a")
+    elif labs:
+        print("\033]0;Generating labels\a")
+    elif images:
+        print("\033]0;Generating embeddings\a")
+
+
     from sklearn.decomposition import PCA, SparsePCA
     sys.path.append(".")
     import matplotlib
@@ -117,6 +127,10 @@ def get_PCA(force=False, labs=True, images=True):
     import matplotlib.pyplot as plt
     if "mega" in sys.argv:
         file_folder = bi.biopython.downloadPDB("../internship/data", "mega-batch", file_path="../internship/data/mega-batch20K.txt", file_format="cif", overwrite=False)
+    if "cath" in sys.argv:
+        file_folder = bi.biopython.downloadPDB("../internship/data", "cath-nonredundant-S20",
+                                                       file_path="../internship/data/cath-dataset-nonredundant-S20.list", file_format="cif",
+                                                       overwrite=False)
     else:
         file_folder = bi.biopython.downloadPDB("../internship/data", "receptors", file_path="../internship/data/receptors.txt", file_format="cif", overwrite=False)
     batches = split_iterable(sorted(os.listdir(file_folder)))
@@ -149,6 +163,7 @@ def get_PCA(force=False, labs=True, images=True):
 
             if not do_images:
                 continue
+
             os.makedirs("imgs", exist_ok=True)
             #if code not in ["1M2Z", "1P93"]:
             #    continue
@@ -241,6 +256,11 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
         file_folder = bi.biopython.downloadPDB("../internship/data", "mega-batch",
                                                file_path="../internship/data/mega-batch20K.txt", file_format="cif",
                                                overwrite=False)
+    elif "cath" in sys.argv:
+        dataset_name = "cath"
+        file_folder = bi.biopython.downloadPDB("../internship/data", "cath-nonredundant-S20",
+                                               file_path="../internship/data/cath-dataset-nonredundant-S20.list", file_format="cif",
+                                               overwrite=False)
     else:
         dataset_name = "rcps"
         file_folder = bi.biopython.downloadPDB("../internship/data", "receptors",
@@ -254,6 +274,7 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
          ])
 
     if train:
+        print("\033]0;Training (curating)\a")
 
 
         structure_list = []
@@ -342,25 +363,7 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
                 if as_image:
                     return image, label
                 image = transform(image)#[-1]#.resize((1,self.image_dims,self.image_dims))
-
-                #print(image)
-                #print(image.shape)
-                if False:
-                    print(i_path)
-
-                    imgs = []
-                    for channel in image:
-                        imgs.append(T.ToPILImage()(channel))
-
-                    fig = plt.figure(figsize=(8, 8))
-                    grid = ImageGrid(fig, 111, nrows_ncols=(2, 2), axes_pad=0.1)
-                    for ax, im in zip(grid, imgs):
-                        ax.imshow(im)
-                        ax.set_axis_off()
-                    plt.show()
-
                 image = image[-1]
-
 
                 # print("emb:", emb.shape, "lab:", lab)
 
@@ -371,7 +374,7 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
 
 
         batch_size = 1
-
+        print()
         print("N chains:", len(structure_list))
         print("N labs:", len(labs))
         print(labs)
@@ -421,7 +424,7 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
         #print(images, labels)
         for n, (lab, img) in enumerate(zip(labels, images)):
             #print(lab, img.shape)
-            writer.add_image(f"input/train ({n})", torch.Tensor(img) )
+            writer.add_image(f"input/train ({n})", torch.Tensor(img), 0)
 
 
 
@@ -447,8 +450,10 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
         criterion = nn.CrossEntropyLoss()
         optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
         epochs = 13
+        print(f"PRINT EVERY: {len(trainloader) // 10}")
         for epoch in range(epochs):  # loop over the dataset multiple times
-            print("EPOCH: ", epoch, end="\r")
+            print(f"\033]0;Training (E={epoch+1}/{epochs})\a")
+
             torch.save(net.state_dict(), "./model.temp.pth")
             with open("./model.temp.data.json", "w") as f:
                 json.dump(data, f, indent=4)
@@ -457,6 +462,7 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
                 pass
 
             running_loss = 0.0
+            print(f'[{epoch + 1}, {0:5d}] loss: {running_loss / 10:.3f}', end="\r")
             for i, d in enumerate(trainloader, 0):
                 # get the inputs; data is a list of [inputs, labels]
                 inputs, labels = d
@@ -484,42 +490,52 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
                 #    #print(net.last_decode)
                 #    #writer.add_image(f"output/train ({i})", net.last_decode[0], epoch)
 
-                if i % 100 == 99:  # print every 1000 mini-batches
-                    print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / 10:.3f}', end = "\r")
-                    writer.add_scalar("Loss/train", running_loss, epoch)
+                if i % (len(trainloader) // 10) == 0 and i != 0:  # print every 1000 mini-batches
+                    print(f'[{epoch + 1}, {i + 0:5d}] loss: {running_loss / 10:.3f}', end = "\r")
+                    writer.add_scalar("Loss/train", running_loss, epoch+1)
                     running_loss = 0.0
 
             with torch.no_grad():
-                for i_name in ["1M2Z_A"]:
-                    i_path = f"imgs/{mode}/{i_name}.png"
-                    image = Image.open(i_path)
-                    image = transform(image)
-                    image = torch.Tensor(np.array([image[-1]]))
-                    bits = net.forward(image)
-                    dec = net.decode(bits)[0]
-                    #dec = transforms.functional.to_pil_image(dec, mode=None)
-                    writer.add_image(f"test/in ({i_name})", image, epoch)
-                    writer.add_image(f"test/out ({i_name})", dec, epoch)
-
+                for i_name in ["1M2Z_A", "1AQK_L", "1BWW_A"]:
+                    try:
+                        i_path = f"imgs/{mode}/{i_name}.png"
+                        image = Image.open(i_path)
+                        image = transform(image)
+                        image = torch.Tensor(np.array([image[-1]]))
+                        bits = net.forward(image)
+                        dec = net.decode(bits)[0]
+                        #dec = transforms.functional.to_pil_image(dec, mode=None)
+                        writer.add_image(f"test/in ({i_name})", image, epoch+1)
+                        writer.add_image(f"test/out ({i_name})", dec, epoch+1)
+                    except Exception as e:
+                        print(e)
+                        continue
+        print()
         print('Finished Training ({} epochs)'.format(epochs))
+        print(f"\033]0;Training (postprocess)\a")
 
         PATH = f'./{net.__class__.__name__}_{mode}_{dataset_name}.model.pth'
 
         torch.save(net.state_dict(), PATH)
 
-        dataiter = iter(testloader)
-        images, labels = next(dataiter)
+        #dataiter = iter(testloader)
+        #images, labels = next(dataiter)
 
 
         net = M(n_features = len(labs), n_chanels=trainset.channels, fig_size=trainset.image_dims)
         net.load_state_dict(torch.load(PATH, weights_only=True))
 
-        outputs = net(images)
+        #outputs = net(images)
 
-        _, predicted = torch.max(outputs, 1)
+        #_, predicted = torch.max(outputs, 1)
 
         correct = 0
         total = 0
+        pres = []
+        truths = []
+
+        correct_pred = {classname: 0 for classname in classes}
+        total_pred = {classname: 0 for classname in classes}
         # since we're not training, we don't need to calculate the gradients for our outputs
         with torch.no_grad():
             for data in testloader:
@@ -530,25 +546,21 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
                 _, predicted = torch.max(outputs, 1)
                 total += labels.size(0)
                 correct += (predicted == labels).sum().item()
+                for i, l, p in zip(images, labels, predicted):
+                    print(i, l, p)
+                    pres.append(classes[l])
+                    truths.append(classes[p])
+                    if l == p:
+                        correct_pred[classes[l]] += 1
+                    total_pred[classes[l]] += 1
 
         print(f'Accuracy of {len(testset)}/{len(trainset)} test images: {100 * correct // total} %')
 
-        # prepare to count predictions for each class
-        correct_pred = {classname: 0 for classname in classes}
-        total_pred = {classname: 0 for classname in classes}
 
-        # again no gradients needed
-        with torch.no_grad():
-            for data in testloader:
-                images, labels = data
-                outputs = net(images)
-                _, predictions = torch.max(outputs, 1)
-                # collect the correct predictions for each class
-                for label, prediction in zip(labels, predictions):
-                    #print(label, prediction)
-                    if label == prediction:
-                        correct_pred[classes[label]] += 1
-                    total_pred[classes[label]] += 1
+        from internship.plotting import plot_confusion
+        print(zip(pres, truths))
+        plot_confusion(truths, pres, f"{net.__class__.__name__}_{mode}_{dataset_name}", 100 * correct // total,  classes )
+
 
 
         if "mega" in sys.argv:
@@ -614,8 +626,10 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
         df.sort_index(level="cath", inplace=True)
         df.to_csv(df_path, index=False)
         print(df)
+        print(f"\033]0;Training (DONE)\a")
 
     if view:
+        print("\033]0;Viewing\a")
         from torchview import draw_graph
         model_graph = draw_graph(M(n_features=6, fig_size=128, n_chanels=1), input_size=(1, 1, 128, 128),
                                  expand_nested=True,
@@ -626,6 +640,7 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
         input("Press Enter to continue...")
 
     if decode:
+        print("\033]0;Decoding\a")
         import torch
         with torch.no_grad():
             if temp:

@@ -1,3 +1,4 @@
+import os
 
 from sklearn.decomposition import PCA
 from sklearn.metrics import confusion_matrix
@@ -25,4 +26,5 @@ def plot_confusion(preds, labels, title, score, classes):
     plt.xlabel("Predicted")
     plt.ylabel("True")
     plt.title(f"{title}_S={score:.3f}")
+    os.makedirs("figs", exist_ok=True)
     plt.savefig(f"figs/{title}_confusion.png")
