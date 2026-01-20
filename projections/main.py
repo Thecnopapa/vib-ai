@@ -248,7 +248,11 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
     import torch.nn as nn
 
     if "small" in sys.argv:
-        from models import SmallNet
+        from models import SmallNet as SmallNet
+        M = SmallNet
+
+    elif "small2" in sys.argv:
+        from models import SmallNetv2 as SmallNet
         M = SmallNet
 
     if "mega" in sys.argv:
@@ -610,15 +614,18 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
                 outputs = net(images)
                 # the class with the highest energy is what we choose as prediction
                 _, predicted = torch.max(outputs, 1)
-                total += labels.size(0)
-                correct += (predicted == labels).sum().item()
+                #total += labels.size(0)
+                #correct += (predicted == labels).sum().item()
                 for i, l, p in zip(images, labels, predicted):
                     #print(i, l, p)
                     pres.append(index_to_label[int(l)])
                     truths.append(index_to_label[int(p)])
+
                     if l == p:
                         correct_pred[index_to_label[int(l)]] += 1
+                        correct += 1
                     total_pred[index_to_label[int(l)]] += 1
+                    total += 1
 
         print(f'Accuracy of {len(testset)}/{len(trainset)} test images: {100 * correct // total} %')
 
@@ -711,8 +718,9 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
             elif "-dots" in sys.argv:
                 mode="projected"
             else:
-                mode = "connected"
-            model_path = f"SmallNet_{mode}_{dataset_name}.model.pth"
+                mode = "double_connected"
+            print(M(1).__dict__)
+            model_path = f"{M(1).__class__.__name__}_{mode}_{dataset_name}.model.pth"
             print(model_path)
             model_data = json.load(open(model_path.split(".")[0] + ".model.data.json"))
 
@@ -751,18 +759,20 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
                 i = torch.Tensor(p)
                 print(i.shape)
 
-
-                preds.append(model_data["index_to_label"][str(torch.max(p, 1).indices[0].numpy())])
+                k = torch.max(p, 1).indices[0].numpy()
+                print("CLASS:", k, "VAL:", i[0,k])
+                preds.append(model_data["index_to_label"][str(k)])
                 print("PRED:", preds[-1])
+                print("Decoding:", d)
                 dec = net.decode(d)[0]
                 print(dec)
                 print(dec.shape)
                 dec = transforms.functional.to_pil_image(dec, mode="L")
 
                 decodes.append(dec)
-                print(decodes[-1])
+                #print(decodes[-1])
                 plt.imshow(dec)
-                plt.show()
+                #plt.show()
 
 
 
@@ -775,21 +785,9 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
 force = "-f" in sys.argv
 if "-l" in sys.argv or "-e" in sys.argv:
     get_PCA(force=force, labs="-l"in sys.argv, images="-e" in sys.argv)
-if "-t" in sys.argv:
-    if "-all" in sys.argv:
-        image_classifier(mode="connected")
-        image_classifier(mode="projected")
-        image_classifier(mode="lines")
-    elif "-lines" in sys.argv:
-        image_classifier(mode="lines")
-    elif "-dots" in sys.argv:
-        image_classifier(mode="projected")
-    else:
-        image_classifier(mode="double_connected")
-if "decode" in sys.argv:
-    image_classifier(mode="connected", train=False, decode=True, temp="temp" in sys.argv)
-if "view" in sys.argv:
-    image_classifier(mode="connected", train=False, view=True)
+else:
+    image_classifier(mode="double_connected", train="-t" in sys.argv, decode="decode" in sys.argv, temp="temp" in sys.argv, view="view" in sys.argv)
+
 
 
 
