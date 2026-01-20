@@ -515,7 +515,8 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
         criterion = nn.CrossEntropyLoss()
         optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
         epochs = 13
-        print(f"PRINT EVERY: {len(trainloader) // 10}")
+        splitsize = len(trainloader) // 10
+        print(f"SPLITSIZE: {splitsize}")
         for epoch in range(epochs):  # loop over the dataset multiple times
             print(f"\033]0;Training (E={epoch+1}/{epochs})\a")
 
@@ -555,9 +556,9 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
                 #    #print(net.last_decode)
                 #    #writer.add_image(f"output/train ({i})", net.last_decode[0], epoch)
 
-                if i % (len(trainloader) // 10) == 0 and i != 0:  # print every 1000 mini-batches
-                    print(f'[{epoch + 1:2d}, {i:5d}] loss: {running_loss / 10:5.3f}', end = "\r")
-                    writer.add_scalar("Loss/train", running_loss, epoch+1)
+                if i % splitsize == 0 and i != 0:  # print every 1000 mini-batches
+                    print(f'[{epoch + 1:2d}, {i:5d}] loss: {running_loss / splitsize:5.3f}', end = "\r")
+                    writer.add_scalar("Loss/train", running_loss/splitsize, epoch+1)
                     running_loss = 0.0
 
             with torch.no_grad():
