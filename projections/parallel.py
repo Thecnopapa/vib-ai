@@ -4,8 +4,10 @@ from bioiain import log
 #print("START")
 print("imported parallel utils")
 cpu_count = os.cpu_count()
+use_max = False
 if os.environ.get("SLURM_CPUS_PER_TASK", None) is not None:
     cpu_count = int(os.environ["SLURM_CPUS_PER_TASK"])
+    use_max = True
 print("Available CPUs:", cpu_count)
 
 
@@ -14,7 +16,10 @@ print("Available CPUs:", cpu_count)
 def split_iterable(iterable, n_parts:int|str="auto"):
 
     if n_parts == "auto":
-        n_parts = cpu_count - 1
+        if use_max:
+            n_parts = cpu_count
+        else:
+            n_parts = cpu_count - 1
     elif n_parts == "max":
         n_parts = cpu_count
     elif n_parts == "double":

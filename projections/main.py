@@ -1,4 +1,4 @@
-import os, sys, json
+import os, sys, json, glob
 import warnings
 import numpy as np
 import pandas as pd
@@ -284,47 +284,120 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
         labs = []
 
         print("DATASET:", file_folder)
-        print(f"Curating {len(os.listdir(file_folder))} images...")
+        print(f"Filtering {len(os.listdir(file_folder))} PDBs...")
+        valid = 0
+        no_label = 0
+        no_image = 0
         for n, file in enumerate(os.listdir(file_folder)):
             code = file.split(".")[0]
             l_path = os.path.join("labels", f"{code}.labels.json")
-            #print(n, file, end=' label: ')
             if os.path.exists(l_path):
                 lab_data = json.load(open(l_path))
                 labs.extend([v["label"] for v in lab_data.values()] )
                 structure_list.append(code)
-                #print(l_path, end="\r")
             else:
-                print(n, file, end=' label: ')
-                print("Not found", end="\r")
+                print(n, file, "label not found", end="\r")
+                no_label += 1
+                continue
+            if False:
+                i_path = os.path.join(f"imgs/{mode}", f"{code}*.png")
+                if glob.glob(i_path):
+                    pass
+                else:
+                    print(n, file, "images not found", end="\r")
+                    no_image += 1
+                    continue
+            structure_list.append(code)
+            valid +=1
+        print()
 
-        n_labs = {l: labs.count(l) for l in set(labs)}
+        print("NO LABEL:", no_label)
+        #print("NO IMAGE:", no_image)
+        print("INVALID:", no_image+no_label)
+        print("VALID:", valid)
 
-        labs = list(set(labs))
-        for n, l in enumerate(labs):
-            label_to_index[str(l)] = int(n)
-            index_to_label[int(n)] = str(l)
+
+
+
+        n_labs = {k:v for k,v in sorted([(l, labs.count(l)) for l in set(labs)], key= lambda x: x[1], reverse=True)}
+
+
+        index_to_label[0] = "other"
+        for n, (k, v) in enumerate(n_labs.items()):
+            if v < 10:
+                label_to_index[str(k)] = 0
+            else:
+                label_to_index[str(k)] = int(n+1)
+                index_to_label[int(n+1)] = str(k)
+
+        labs = index_to_label.values()
+        all_labs = label_to_index.keys()
 
 
         class ImageDataset(Dataset):
-            def __init__(self, struc_list, folder, label_folder=None):
-                print("Loading data...")
-                self.structures = struc_list
-                self.folder = folder
+            def __init__(self,   pdb_codes=None, img_folder=None, label_folder=None):
+                print(f"ImageDataset: Loading data ({len(pdb_codes)} ids)")
+                assert img_folder is not None
+                if len(pdb_codes[0]) == 4:
+                    self.has_chains = False
+                    self.has_separated_chains = False
+                elif len(pdb_codes[0]) == 5:
+                    self.has_chains = True
+                    self.has_separated_chains = False
+                elif len(pdb_codes[0]) == 6:
+                    self.has_chains = True
+                    self.has_separated_chains = True
+                    self.separator=pdb_codes[0][4]
+                else:
+                    raise Exception("ImageDataset: provided list is not made of pdb codes and/or chains")
+
+
+                self.img_folder = img_folder
+
                 if label_folder is None:
-                    self.label_folder = folder
+                    self.label_folder = self.img_folder
                 else:
                     self.label_folder = label_folder
 
                 self.images = []
                 self.labels = []
+                self.codes = []
+                self.chains = []
                 self.image_dims = None
-                for file in os.listdir(self.folder):
+
+                self.validate_input(pdb_codes)
+
+
+                example_img = Image.open(os.path.join(self.img_folder, self.images[0]))
+                #print(img)
+                self.channels = 1
+                self.image_dims = example_img.size[0]
+
+                print(f"ImageDataset: loaded {len(self)} images from {len(self.codes)} pdbs and {len(self.chains)} chains!")
+
+
+            def validate_input(self, codes=None):
+
+                no_label = 0
+
+                valid_chains = []
+                valid_codes = []
+                for file in os.listdir(self.img_folder):
                     name = file.split(".")[0]
                     code, chain = name.split("_")
-                    if code not in struc_list:
-                        continue
-                    #print(file, end="\r")
+                    if codes is not None:
+                        if self.has_chains:
+                            if self.has_separated_chains:
+                                if not (f"{code}{self.separator}{chain}" in codes):
+                                    continue
+                            else:
+                                if not (f"{code}{chain}" in codes):
+                                    continue
+                        else:
+                            if not (code in codes):
+                                continue
+
+
                     l_path = os.path.join(self.label_folder, f"{code}.labels.json")
                     if os.path.exists(l_path):
                         try:
@@ -332,13 +405,18 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
                             self.labels.append(lab)
                             self.images.append(file)
                         except KeyError:
-                            pass
-                img = Image.open(os.path.join(self.folder, self.images[0]))
-                #print(img)
-                self.channels = 1
-                self.image_dims = img.size[0]
-                print(f"Loaded {len(self)} images!")
-
+                            no_label += 1
+                            continue
+                    else:
+                        no_label += 1
+                        continue
+                    valid_chains.append(f"{code}_{chain}")
+                    valid_codes.append(code)
+                if no_label > 0:
+                    print(f"ImageDataset: (Warning) Some labels were not found: {no_label}")
+                self.codes = sorted(set(valid_codes))
+                self.chains = sorted(set(valid_chains))
+                return self.chains
 
 
 
@@ -352,7 +430,7 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
                 name = os.path.basename(fname).split(".")[0]
                 code, ch = name.split("_")
 
-                i_path = os.path.join(self.folder, fname)
+                i_path = os.path.join(self.img_folder, fname)
                 l_path = os.path.join(self.label_folder, f"{code}.labels.json")
 
                 label = label_to_index[json.load(open(l_path))[ch]["label"].lower().strip()]
@@ -376,19 +454,25 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
         batch_size = 1
         print()
         print("N chains:", len(structure_list))
-        print("N labs:", len(labs))
-        print(labs)
+        print("N labs (n>10):", len(labs))
+        print("N labs (all):", len(all_labs))
+        #print(json.dumps({k:v for k,v in n_labs.items() if v>=10}, indent=4))
         np.random.seed(6)
-        train_list, test_list = train_test_split(structure_list, test_size=0.2, random_state=42)
 
 
         img_folder = f"imgs/{mode}"
         assert os.path.exists(img_folder)
         print("IMG_FOLDER:", img_folder)
+        structure_list = list(ImageDataset(structure_list, img_folder=img_folder, label_folder="labels").chains)
+        print(len(structure_list))
+        print(structure_list[0:20])
+        train_list, test_list = train_test_split(structure_list, train_size=0.8, test_size=0.2, random_state=42)
+        print(len(train_list), len(test_list))
+        trainset = ImageDataset(train_list, img_folder=img_folder, label_folder="labels")
+        testset = ImageDataset(test_list, img_folder=img_folder, label_folder="labels")
 
-        #trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=transform)
-        trainset = ImageDataset(train_list, folder=img_folder, label_folder="labels")
-        testset = ImageDataset(test_list, folder=img_folder, label_folder="labels")
+        print(f"ACTUAL VALID DATA [(img+label)/chain]: \033[0;36m{len(trainset)+len(testset)}\033[0m test/train: {len(testset)}/{len(trainset)} ({len(testset)/len(trainset):.2f})")
+
 
         from parallel import cpu_count
         trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=0)
@@ -399,29 +483,10 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
         from torch.utils.tensorboard import SummaryWriter
         writer = SummaryWriter()
 
-        def matplotlib_imshow(img, one_channel=False):
-            if one_channel:
-                img = img.mean(dim=0)
-            img = img / 2 + 0.5  # unnormalize
-            npimg = img.numpy()
-            if one_channel:
-                plt.imshow(npimg, cmap="Greys")
-            else:
-                plt.imshow(np.transpose(npimg, (1, 2, 0)))
-        import torchvision
         images = np.array([[trainset.__getitem__(x, as_image=False)[0].numpy()] for x in range(4)])
         #print(images)
         labels = [trainset[x][1] for x in range(4)]
 
-
-        # create grid of images
-        #img_grid = torchvision.utils.make_grid(images)
-
-        # show images
-        #matplotlib_imshow(img_grid, one_channel=False)
-
-        # write to tensorboard
-        #print(images, labels)
         for n, (lab, img) in enumerate(zip(labels, images)):
             #print(lab, img.shape)
             writer.add_image(f"input/train ({n})", torch.Tensor(img), 0)
