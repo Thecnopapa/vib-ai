@@ -21,7 +21,7 @@ def plot_embeddings(dataset, labels, title, score):
 def plot_confusion(preds, labels, title, score, classes):
     bi.log(1, "Plotting confusion...")
     cm = confusion_matrix(labels, preds)
-    plt.figure(figsize=(8 ,8))
+    plt.figure(figsize=(1*len(classes) ,1*len(classes)))
     sb.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=classes, yticklabels=classes)
     plt.xlabel("Predicted")
     plt.ylabel("True")
