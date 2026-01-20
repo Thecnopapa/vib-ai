@@ -278,9 +278,6 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
 
 
         structure_list = []
-
-        label_to_index = {}
-        index_to_label = {}
         labs = []
 
         print("DATASET:", file_folder)
@@ -320,15 +317,18 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
 
 
         n_labs = {k:v for k,v in sorted([(l, labs.count(l)) for l in set(labs)], key= lambda x: x[1], reverse=True)}
+        n_labs["other"] = 0
 
-
-        index_to_label[0] = "other"
-        for n, (k, v) in enumerate(n_labs.items()):
+        index_to_label = {0: "other"}
+        label_to_index = {"other": 0}
+        for k, v in n_labs.items():
             if v < 10:
                 label_to_index[str(k)] = 0
+                n_labs["other"] +=1
             else:
-                label_to_index[str(k)] = int(n+1)
-                index_to_label[int(n+1)] = str(k)
+                n = len(index_to_label)
+                label_to_index[str(k)] = int(n)
+                index_to_label[int(n)] = str(k)
 
         labs = index_to_label.values()
         all_labs = label_to_index.keys()
@@ -556,7 +556,7 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
                 #    #writer.add_image(f"output/train ({i})", net.last_decode[0], epoch)
 
                 if i % (len(trainloader) // 10) == 0 and i != 0:  # print every 1000 mini-batches
-                    print(f'[{epoch + 1}, {i + 0:5d}] loss: {running_loss / 10:.3f}', end = "\r")
+                    print(f'[{epoch + 1:2d}, {i:5d}] loss: {running_loss / 10:.3f}', end = "\r")
                     writer.add_scalar("Loss/train", running_loss, epoch+1)
                     running_loss = 0.0
 
@@ -599,8 +599,8 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
         pres = []
         truths = []
 
-        correct_pred = {classname: 0 for classname in classes}
-        total_pred = {classname: 0 for classname in classes}
+        correct_pred = {classname: 0 for classname in sorted(labs)}
+        total_pred = {classname: 0 for classname in sorted(labs)}
         # since we're not training, we don't need to calculate the gradients for our outputs
         with torch.no_grad():
             for data in testloader:
@@ -612,26 +612,19 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
                 total += labels.size(0)
                 correct += (predicted == labels).sum().item()
                 for i, l, p in zip(images, labels, predicted):
-                    print(i, l, p)
-                    pres.append(classes[l])
-                    truths.append(classes[p])
+                    #print(i, l, p)
+                    pres.append(index_to_label[int(l)])
+                    truths.append(index_to_label[int(p)])
                     if l == p:
-                        correct_pred[classes[l]] += 1
-                    total_pred[classes[l]] += 1
+                        correct_pred[index_to_label[int(l)]] += 1
+                    total_pred[index_to_label[int(l)]] += 1
 
         print(f'Accuracy of {len(testset)}/{len(trainset)} test images: {100 * correct // total} %')
 
 
         from internship.plotting import plot_confusion
-        print(zip(pres, truths))
-        plot_confusion(truths, pres, f"{net.__class__.__name__}_{mode}_{dataset_name}", 100 * correct // total,  classes )
+        plot_confusion(truths, pres, f"{net.__class__.__name__}_{mode}_{dataset_name}", 100 * correct // total, sorted(labs))
 
-
-
-        if "mega" in sys.argv:
-            dataset = "mega"
-        else:
-            dataset = "rcps"
 
 
         columns = [
@@ -662,29 +655,31 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
         #print("LEXSORTED:", df.index.is_monotonic_increasing, )
 
 
-        for classname, correct_count in sorted([(k,v) for k, v in correct_pred.items()], key=lambda x: n_labs[x[0]], reverse=True):
+        for classname, correct_count in sorted([(k,v) for k, v in correct_pred.items() if k in labs], key=lambda x: n_labs[x[0]], reverse=True):
             #print(total_pred)
             df.sort_index(level="cath", inplace=True)
             title = get_family_desc(classname)
             warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
 
-            df.loc[(classname, dataset, mode), "cath"] = classname
-            df.loc[(classname, dataset, mode), "title"] = title
-            df.loc[(classname, dataset, mode), "dataset"] = dataset
-            df.loc[(classname, dataset, mode), "mode"] = mode
+            df.loc[(classname, dataset_name, mode), "cath"] = classname
+            df.loc[(classname, dataset_name, mode), "title"] = title
+            df.loc[(classname, dataset_name, mode), "dataset"] = dataset_name
+            df.loc[(classname, dataset_name, mode), "mode"] = mode
 
-            df.loc[(classname, dataset, mode), "n_samples"] = n_labs[classname]
+            df.loc[(classname, dataset_name, mode), "n_samples"] = n_labs[classname]
 
             if total_pred[classname] == 0:
                 accuracy = None
+                print(f'Accuracy for class ({label_to_index[classname]:3d}) -> {classname:12s}: \t{accuracy}\t(not in test set)\tin data: {n_labs[classname]:3d}\ttitle: {title}')
+
             else:
                 accuracy = 100 * float(correct_count) / total_pred[classname]
-                print(f'Accuracy for class ({label_to_index[classname]}): {classname:5s}: \t{accuracy:.1f}%\tcorrect: {correct_count}/{total_pred[classname]}\tin data: {n_labs[classname]}\ttitle: {title}')
+                print(f'Accuracy for class ({label_to_index[classname]:3d}) -> {classname:12s}: \t{accuracy:4.2f}%\tcorrect: {correct_count:3d}/{total_pred[classname]:3d}\tin data: {n_labs[classname]:3d}\ttitle: {title}')
 
-                df.loc[(classname, dataset, mode), "correct"] = correct_count
-                df.loc[(classname, dataset, mode), "total"] = total_pred[classname]
+                df.loc[(classname, dataset_name, mode), "correct"] = correct_count
+                df.loc[(classname, dataset_name, mode), "total"] = total_pred[classname]
 
-            df.loc[(classname, dataset, mode), "accuracy"] = accuracy
+            df.loc[(classname, dataset_name, mode), "accuracy"] = accuracy
             warnings.simplefilter(action='default', category=pd.errors.PerformanceWarning)
             df.sort_index(level="cath", inplace=True)
 
