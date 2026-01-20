@@ -556,7 +556,7 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
                 #    #writer.add_image(f"output/train ({i})", net.last_decode[0], epoch)
 
                 if i % (len(trainloader) // 10) == 0 and i != 0:  # print every 1000 mini-batches
-                    print(f'[{epoch + 1:2d}, {i:5d}] loss: {running_loss / 10:.3f}', end = "\r")
+                    print(f'[{epoch + 1:2d}, {i:5d}] loss: {running_loss / 10:5.3f}', end = "\r")
                     writer.add_scalar("Loss/train", running_loss, epoch+1)
                     running_loss = 0.0
 
@@ -674,7 +674,7 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
 
             else:
                 accuracy = 100 * float(correct_count) / total_pred[classname]
-                print(f'Accuracy for class ({label_to_index[classname]:3d}) -> {classname:12s}: \t{accuracy:4.2f}%\tcorrect: {correct_count:3d}/{total_pred[classname]:3d}\tin data: {n_labs[classname]:3d}\ttitle: {title}')
+                print(f'Accuracy for class ({label_to_index[classname]:3d}) -> {classname:12s}: \t{accuracy:4.2f}%\tcorrect:  {correct_count:3d}/{total_pred[classname]:3d}\tin data: {n_labs[classname]:3d}\ttitle: {title}')
 
                 df.loc[(classname, dataset_name, mode), "correct"] = correct_count
                 df.loc[(classname, dataset_name, mode), "total"] = total_pred[classname]
