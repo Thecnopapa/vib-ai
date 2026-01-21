@@ -126,8 +126,10 @@ def get_PCA(force=False, labs=True, images=True):
     matplotlib.use('agg')
     import matplotlib.pyplot as plt
     if "mega" in sys.argv:
-        file_folder = bi.biopython.downloadPDB("../internship/data", "mega-batch", file_path="../internship/data/mega-batch20K.txt", file_format="cif", overwrite=False)
-    if "cath" in sys.argv:
+        file_folder = bi.biopython.downloadPDB("../internship/data", "mega-batch",
+                                               file_path="../internship/data/mega-batch20K.txt", file_format="cif",
+                                               overwrite=False)
+    elif "cath" in sys.argv:
         file_folder = bi.biopython.downloadPDB("../internship/data", "cath-nonredundant-S20",
                                                        file_path="../internship/data/cath-dataset-nonredundant-S20.list", file_format="cif",
                                                        overwrite=False)
@@ -135,6 +137,7 @@ def get_PCA(force=False, labs=True, images=True):
         file_folder = bi.biopython.downloadPDB("../internship/data", "receptors", file_path="../internship/data/receptors.txt", file_format="cif", overwrite=False)
     batches = split_iterable(sorted(os.listdir(file_folder)))
     #[print(b) for b in batches]
+    print("FILE_FOLDER:", file_folder)
     os.makedirs("labels", exist_ok=True)
     def generate_cath_labels(batch, do_labs, do_images):
         print("STARTING BATCH")
