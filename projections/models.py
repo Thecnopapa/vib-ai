@@ -5,6 +5,84 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+import matplotlib.pyplot as plt
+
+
+
+
+
+
+def DiceLoss(pred, target, smooth=1, show=False):
+
+    # Apply sigmoid to convert logits to probabilities
+
+    #pred = torch.sigmoid(pred)
+    #target = torch.sigmoid(pred)
+    #print(pred.shape)
+    #print(target.shape)
+
+    if show:
+        fig, ax = plt.subplots(1, 6, figsize=(30, 5))
+        ax[1].imshow(pred.detach().numpy())
+        ax[1].set_title("pred")
+        ax[0].imshow(target.detach().numpy())
+        ax[0].set_title("target")
+
+
+
+
+
+
+    # Calculate intersection and union
+    intersection = (pred * target).sum(dim=(0, 1))
+    #(intersection.detach().numpy())
+    #print(intersection.shape)
+    if show:
+        i = (pred * target)
+        ax[2].imshow(i.detach().numpy())
+        ax[2].set_title(f"intersection ({intersection:.3f})")
+
+
+    union = pred.sum(dim=(0,1)) + target.sum(dim=(0,1))
+    #print(union.detach().numpy())
+    #print(union.shape)
+    if show:
+        u = (pred + target)
+        ax[3].imshow(u.detach().numpy())
+        ax[3].set_title(f"union ({union:.3f})")
+
+
+    # Compute Dice Coefficient
+    dice = (2. * intersection + smooth) / (union + smooth)
+    #print(dice.detach().numpy())
+    #print(dice.shape)
+    if show:
+        d = (2. * i + smooth) / (u + smooth)
+        ax[4].imshow(d.detach().numpy())
+        ax[4].set_title(f"dice ({dice:.3f})")
+
+
+    # Return Dice Loss
+    loss = 1 - dice.mean()
+    #print("DICE LOSS:", loss)
+
+    if show:
+        l = (1 - d)
+        ax[5].imshow(l.detach().numpy())
+        ax[5].set_title(f"loss ({loss:.3f})")
+        plt.show()
+
+
+    return loss
+
+
+
+
+
+
+
+
+
 class SmallNetv2(nn.Module):
     def __init__(self, n_features=None, n_chanels=1, fig_size=128):
         super().__init__()
@@ -19,41 +97,68 @@ class SmallNetv2(nn.Module):
         self.kernel2 = 4
         self.stride2 = 2
         print("KERNELS:", self.kernel1, self.kernel2)
-
-        self.conv1 = nn.Conv2d(n_chanels, n_chanels * 2, self.kernel1, stride=self.stride1)
-        self.conv2 = nn.Conv2d(n_chanels * 2, n_chanels * 4, self.kernel2, stride=self.stride2)
-        #self.red_fig_size = self.fig_size - self.kernel2 - self.kernel1 +
         self.red_fig_size = 30
-
         print("RED_FIG_SIZE =", self.red_fig_size)
         assert self.red_fig_size % 2 == 0
+
+        f_layers = [
+            nn.Conv2d(n_chanels, n_chanels * 2, self.kernel1, stride=self.stride1),
+            nn.ReLU(),
+            nn.Conv2d(n_chanels * 2, n_chanels * 4, self.kernel2, stride=self.stride2),
+            nn.ReLU(),
+
+            nn.Flatten(),
+            nn.Linear(int(self.red_fig_size / 2) * n_chanels * 2 * self.red_fig_size * n_chanels * 4,
+                      fig_size * 2),
+            nn.ReLU(),
+
+            nn.Linear(fig_size * 2, fig_size),
+            nn.Linear(fig_size, n_features),
+            nn.Softmax(dim=1)
+        ]
+
         print("CONV2 flat:", n_chanels * 2 * int(self.red_fig_size / 2) * self.red_fig_size)
 
-        self.fc1 = nn.Linear(int(self.red_fig_size / 2) * n_chanels * 2 * self.red_fig_size * n_chanels * 4,
-                             fig_size * 2)
-        self.fc2 = nn.Linear(fig_size * 2, fig_size)
-        self.fc3 = nn.Linear(fig_size, n_features)
+        r_layers = [
+            nn.Linear(n_features, fig_size),
+            nn.Linear(fig_size, fig_size * 2),
+            nn.Linear(fig_size * 2,
+                      int(self.red_fig_size / 2) * n_chanels * 2 * self.red_fig_size * n_chanels * 4),
+            nn.Unflatten(-1, (self.n_chanels * 4, self.red_fig_size, self.red_fig_size)),
+            nn.ConvTranspose2d(n_chanels * 4, n_chanels * 2, self.kernel2, stride=self.stride2),
+            nn.ConvTranspose2d(n_chanels * 2, n_chanels, self.kernel1, stride=self.stride1),
+            #nn.Softmax(dim=2)
 
-        self.rfc3 = nn.Linear(n_features, fig_size)
-        self.rfc2 = nn.Linear(fig_size, fig_size * 2)
-        self.rfc1 = nn.Linear(fig_size * 2,
-                              int(self.red_fig_size / 2) * n_chanels * 2 * self.red_fig_size * n_chanels * 4)
-        self.rconv2 = nn.ConvTranspose2d(n_chanels * 4, n_chanels * 2, self.kernel2, stride=self.stride2)
-        self.rconv1 = nn.ConvTranspose2d(n_chanels * 2, n_chanels, self.kernel1, stride=self.stride1)
+        ]
+        self.f_net = nn.Sequential(*f_layers)
+        self.r_net = nn.Sequential(*r_layers)
 
     def forward(self, x):
-        # [4, n_channels, 32, 32] / [4, n_channels, 100, 100]
-        # print(x.shape)
         if len(x.shape) == 3:
             x = x.reshape([1, *x.shape])
+        x = self.f_net(x)
+        return x
+
+    def backward(self, x):
+        x = self.r_net(x)
+        return x
+
+    def forward_old(self, x):
+        # [4, n_channels, 32, 32] / [4, n_channels, 100, 100]
+        # print(x.shape)
+
         # print(x.shape)
         # print(x)
-        x = F.relu(self.conv1(x))
+        #x = F.relu(self.conv1(x))
+        x = self.conv1(x)
+
         # print(x.shape)
 
         # [4, 6, 14, 14]
         # print(x.shape)
-        x = F.relu(self.conv2(x))
+        # = F.relu(self.conv2(x))
+        x = self.conv2(x)
+
         # [4, 16, 5, 5]
         # print(x.shape)
         x = torch.flatten(x, 1)
@@ -67,10 +172,10 @@ class SmallNetv2(nn.Module):
         # [4, 84]
         x = self.fc3(x)
         # [4, *n_features*]
-        self.decode(x)
-        return x
+        y = self.backward(x)
+        return x, y
 
-    def decode(self, x):
+    def backward_old(self, x):
 
         x = self.rfc3(x)
         x = self.rfc2(x)

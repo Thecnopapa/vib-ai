@@ -422,12 +422,8 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
                 self.chains = sorted(set(valid_chains))
                 return self.chains
 
-
-
             def __len__(self):
                 return len(self.images)
-
-
 
             def __getitem__(self, idx, as_image=False):
                 fname = self.images[idx]
@@ -469,7 +465,7 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
         print("IMG_FOLDER:", img_folder)
         structure_list = list(ImageDataset(structure_list, img_folder=img_folder, label_folder="labels").chains)
         print(len(structure_list))
-        print(structure_list[0:20])
+        #print(structure_list[0:20])
         train_list, test_list = train_test_split(structure_list, train_size=0.8, test_size=0.2, random_state=42)
         print(len(train_list), len(test_list))
         trainset = ImageDataset(train_list, img_folder=img_folder, label_folder="labels")
@@ -482,7 +478,6 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
         trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=0)
         testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=True, num_workers=0)
 
-        classes = labs
 
         from torch.utils.tensorboard import SummaryWriter
         writer = SummaryWriter()
@@ -515,85 +510,166 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
         import torch.optim as optim
         import torch
 
-
+        #[print(p.shape, type(p)) for p in net.f_net.parameters()]
+        probs = []
         criterion = nn.CrossEntropyLoss()
-        optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
-        epochs = 13
+
+        optimizer = optim.SGD(net.f_net.parameters(), lr=0.001)
+
+        #i_criterion = nn.CrossEntropyLoss()
+        from models import DiceLoss
+        i_criterion = DiceLoss
+        i_optimizer = optim.SGD(net.r_net.parameters(), lr=0.001)
+
+        epochs = 42
         splitsize = len(trainloader) // 10
         print(f"SPLITSIZE: {splitsize}")
-        for epoch in range(epochs):  # loop over the dataset multiple times
-            print(f"\033]0;Training (E={epoch+1}/{epochs})\a")
+        try:
+            for epoch in range(epochs):  # loop over the dataset multiple times
+                print(f"\033]0;Training (E={epoch+1}/{epochs})\a")
 
-            torch.save(net.state_dict(), "./model.temp.pth")
-            with open("./model.temp.data.json", "w") as f:
-                json.dump(data, f, indent=4)
-            if epoch//5 == 0:
-                #image_classifier(train=False, decode=True, temp=True)
-                pass
+                torch.save(net.state_dict(), "./model.temp.pth")
+                with open("./model.temp.data.json", "w") as f:
+                    json.dump(data, f, indent=4)
+                if epoch//5 == 0:
+                    #image_classifier(train=False, decode=True, temp=True)
+                    pass
 
-            running_loss = 0.0
-            print(f'[{epoch + 1}, {0:5d}] loss: {running_loss / 10:.3f}', end="\r")
-            for i, d in enumerate(trainloader, 0):
-                # get the inputs; data is a list of [inputs, labels]
-                inputs, labels = d
+                running_loss = 0.0
+                running_i_loss = 0.0
+                print(f'[{epoch + 1}, {0:5d}] loss: {running_loss / 10:.3f}', end="\r")
 
-                # zero the parameter gradients
-                optimizer.zero_grad()
+                for i, d in enumerate(trainloader, 0):
+                    # get the inputs; data is a list of [inputs, labels]
+                    imgs, labels = d
+                    if len(imgs.shape) == 3:
+                        imgs = imgs.reshape([1, *imgs.shape])
+
+                    # zero the parameter gradients
+                    optimizer.zero_grad()
+
+                    outputs = net(imgs)
+                    pred = torch.max(outputs, 1).indices[0].numpy()
+                    truth = [0]*len(labs)
+                    truth[labels[0]] = 1
+                    truth = torch.Tensor(truth)
+                    #print()
+                    #print("TRUTH:", truth)
+                    #print(outputs, m, outputs[0][m], truth[m])
+
+                    #print(outputs.shape, truth.shape)
+                    #print(outputs, truth.numpy())
+                    loss = criterion(outputs[0], truth)
+                    loss.backward(retain_graph=True)
+
+                    #print("LOSS:", loss.item())
+                    #print(loss.item())
+
+                    #fig, ax = plt.subplots(1, 2, figsize=(10, 5))
+
+                    i_optimizer.zero_grad()
+                    i_outputs = net.backward(torch.Tensor([truth.numpy()]))[0]
+
+                    #print(i_outputs[0].shape, imgs[0].shape, imgs[0, :, :-1, :-1].shape)
+                    img = imgs[0, :, :-1, :-1]
+                    #print(img)
+                    #img = nn.Softmax(dim=1)(img)
+                    #out = nn.Softmax(dim=1)(i_outputs[0])
+                    #print(img.shape)
+                    #print(img)
+                    #ax[0].imshow(img.detach().numpy()[0])
+
+                    #(out.shape)
+                    #print(out)
+                    #ax[1].imshow(out.detach().numpy()[0])
+                    #plt.show()
+
+                    #print(img)
+                    #print(i_outputs[0])
+                    i_loss = i_criterion(i_outputs[0], img[0])
+                    #print("I-LOSS:", i_loss.item())
+                    #print(i_loss.item())
+                    i_loss.backward()
+                    optimizer.step()
+                    i_optimizer.step()
+
+                    # print statistics
+                    running_loss += loss.item()
+                    running_i_loss += i_loss.item()
+                    #if i < 4:
+                    #    #print(net.last_decode)
+                    #    #writer.add_image(f"output/train ({i})", net.last_decode[0], epoch)
+                    print(
+                        f'[{epoch + 1:2d}, {i%(splitsize+1):5d}] loss: {running_loss / (i % splitsize + 1):5.3f} i-loss: {running_i_loss / (i % splitsize+1):5.3f}',
+                        end="\r")
+
+                    if i % splitsize == 0 and i != 0:  # print every 1000 mini-batches
+                        print(f'[{epoch + 1:2d}, {i:5d}] loss: {running_loss / splitsize:5.3f} i-loss: {running_i_loss / splitsize:5.3f}', end = "\n")
+                        writer.add_scalar("loss/encode", running_loss / splitsize, epoch+1)
+                        writer.add_scalar("loss/decode", running_i_loss / splitsize, epoch + 1)
+                        running_loss = 0.0
+                        running_i_loss = 0.0
+
+                with torch.no_grad():
+                    for i_name in ["1M2Z_A", "1AQK_L", "1BWW_A", "1GLU_A"]:
+                        try:
+                            i_path = f"imgs/{mode}/{i_name}.png"
+                            image = Image.open(i_path)
+                            image = transform(image)
+                            image = torch.Tensor(np.array([image[-1]]))
+                            bits = net(image)
+                            print("BITS:", bits[0])
+                            dec = net.backward(bits[0])
+                            #image = nn.Softmax(dim=1)(image)#*256
+                            #dec = nn.Softmax(dim=1)(dec)#*256
+                            #print(dec.shape)
+                            #print(dec)
+                            #print(image.shape)
+                            #print(image)
+                            #dec = transforms.functional.to_pil_image(dec, mode=None)
+                            writer.add_image(f"test/{i_name} (in)", image, epoch+1)
+                            writer.add_image(f"test/{i_name} (out)", dec, epoch+1)
+                        except Exception as e:
+                            print(e)
+                            exit()
+                            continue
+                    for l in labs:
+                        try:
+                            bits = [0]*len(labs)
+                            #print(bits)
+                            n = label_to_index[l]
+                            bits[n] = 1
+                            #print(bits)
+                            bits = torch.Tensor(bits)
+                            print("BITS LAB:", bits)
+                            dec = net.backward(bits)
+                            #print(dec)
+                            writer.add_image(f"classes/{l}", dec, epoch+1)
+                        except Exception as e:
+                            print(e)
+                            exit()
+                            continue
+            print()
+            print('Finished Training ({} epochs)'.format(epochs))
+            print(f"\033]0;Training (postprocess)\a")
+
+            PATH = f'./{net.__class__.__name__}_{mode}_{dataset_name}.model.pth'
+
+            torch.save(net.state_dict(), PATH)
+        except KeyboardInterrupt:
+            PATH = f'./model.temp.pth'
 
 
-
-                # forward + backward + optimize
-                outputs = net(inputs)
-                #print(outputs.shape)
-                #print(inputs.shape)
-                #print(labels.shape)
-                #print(outputs)
-                #print(labels)
-                loss = criterion(outputs, labels)
-
-                loss.backward()
-                optimizer.step()
-
-                # print statistics
-                running_loss += loss.item()
-                #if i < 4:
-                #    #print(net.last_decode)
-                #    #writer.add_image(f"output/train ({i})", net.last_decode[0], epoch)
-
-                if i % splitsize == 0 and i != 0:  # print every 1000 mini-batches
-                    print(f'[{epoch + 1:2d}, {i:5d}] loss: {running_loss / splitsize:5.3f}', end = "\r")
-                    writer.add_scalar("Loss/train", running_loss/splitsize, epoch+1)
-                    running_loss = 0.0
-
-            with torch.no_grad():
-                for i_name in ["1M2Z_A", "1AQK_L", "1BWW_A"]:
-                    try:
-                        i_path = f"imgs/{mode}/{i_name}.png"
-                        image = Image.open(i_path)
-                        image = transform(image)
-                        image = torch.Tensor(np.array([image[-1]]))
-                        bits = net.forward(image)
-                        dec = net.decode(bits)[0]
-                        #dec = transforms.functional.to_pil_image(dec, mode=None)
-                        writer.add_image(f"test/in ({i_name})", image, epoch+1)
-                        writer.add_image(f"test/out ({i_name})", dec, epoch+1)
-                    except Exception as e:
-                        print(e)
-                        continue
-        print()
-        print('Finished Training ({} epochs)'.format(epochs))
-        print(f"\033]0;Training (postprocess)\a")
-
-        PATH = f'./{net.__class__.__name__}_{mode}_{dataset_name}.model.pth'
-
-        torch.save(net.state_dict(), PATH)
 
         #dataiter = iter(testloader)
         #images, labels = next(dataiter)
 
-
-        net = M(n_features = len(labs), n_chanels=trainset.channels, fig_size=trainset.image_dims)
-        net.load_state_dict(torch.load(PATH, weights_only=True))
+        try:
+            net = M(n_features = len(labs), n_chanels=trainset.channels, fig_size=trainset.image_dims)
+            net.load_state_dict(torch.load(PATH, weights_only=True))
+        except:
+            print("Temp model does not match!")
+            exit()
 
         #outputs = net(images)
 
@@ -728,7 +804,7 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
             net = M(n_features=n_features, fig_size=model_data["fig_size"], n_chanels=model_data["n_channels"])
 
             print("N FEATURES:", n_features)
-            print(model_data["index_to_label"])
+            #print(model_data["index_to_label"])
             for n in range(n_features):
                 print(" - ", n, model_data["index_to_label"][str(n)])
             net.load_state_dict(torch.load(model_path, weights_only=True))
@@ -757,6 +833,11 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
                 print(len(to_pred))
             for p, d in zip(to_pred, to_dec):
                 i = torch.Tensor(p)
+                in_img = transforms.functional.to_pil_image(i, mode="L")
+                plt.imshow(in_img)
+                plt.colorbar()
+                plt.show()
+                plt.close()
                 print(i.shape)
 
                 k = torch.max(p, 1).indices[0].numpy()
@@ -764,20 +845,24 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
                 preds.append(model_data["index_to_label"][str(k)])
                 print("PRED:", preds[-1])
                 print("Decoding:", d)
-                dec = net.decode(d)[0]
+                dec = net.backward(d)[0]
                 print(dec)
                 print(dec.shape)
+
                 dec = transforms.functional.to_pil_image(dec, mode="L")
 
                 decodes.append(dec)
                 #print(decodes[-1])
                 plt.imshow(dec)
+                plt.colorbar()
+                plt.show()
+
                 #plt.show()
 
 
 
         plt.savefig(f"./{net.__class__.__name__}_lines_{dataset_name}_n{len(to_pred[0])}_p{"_".join(str(i) for i in pred_labels)}.png")
-        plt.show()
+
 
 
 
