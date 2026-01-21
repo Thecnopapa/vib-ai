@@ -535,9 +535,7 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
                 torch.save(net.state_dict(), "./model.temp.pth")
                 with open("./model.temp.data.json", "w") as f:
                     json.dump(data, f, indent=4)
-                if epoch//5 == 0:
-                    #image_classifier(train=False, decode=True, temp=True)
-                    pass
+
 
                 running_loss = 0.0
                 running_i_loss = 0.0
@@ -555,7 +553,7 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
                     outputs = net(imgs)
                     pred = torch.max(outputs, 1).indices[0].numpy()
                     truth = [0.]*len(labs)
-                    truth[labels[0.]] = 1.
+                    truth[labels[0]] = 1.
                     truth = torch.Tensor(truth)
                     #print()
                     #print("TRUTH:", truth)
