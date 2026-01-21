@@ -580,7 +580,7 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
         i_criterion = DiceLoss
         #i_optimizer = optim.SGD(net.r_net.parameters(), lr=0.001)
         i_optimizer = optim.AdamW(net.r_net.parameters(), lr=0.001)
-        epochs = 42
+        epochs = 100
         splitsize = len(trainloader) // 10
         print(f"SPLITSIZE: {splitsize}")
         try:
