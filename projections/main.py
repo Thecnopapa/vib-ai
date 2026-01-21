@@ -539,7 +539,8 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
 
                 running_loss = 0.0
                 running_i_loss = 0.0
-                print(f'[{epoch + 1}, {0:5d}] loss: {running_loss / 10:.3f}', end="\r")
+                if os.environ.get("SLURM_CPUS_PER_TASK", None) is None:
+                    print(f'[{epoch + 1}, {0:5d}] loss: {running_loss / 10:.3f}', end="\r")
 
                 for i, d in enumerate(trainloader, 0):
                     # get the inputs; data is a list of [inputs, labels]
@@ -619,11 +620,11 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
                             image = Image.open(i_path)
                             image = transform(image)
                             image = torch.Tensor(np.array([image[-1]]))
-                            print(image)
+                            #print(image)
 
                             #image = torch.sigmoid(image)
                             bits = net(image)
-                            print("BITS:", bits[0])
+                            #print("BITS:", bits[0])
                             dec = net.backward(bits[0])
                             #image = nn.Softmax(dim=1)(image)#*256
                             #dec = nn.Softmax(dim=1)(dec)#*256
@@ -632,10 +633,10 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
                             #print(image.shape)
                             #print(image)
                             #dec = transforms.functional.to_pil_image(dec, mode=None)
-                            overlay = torch.cat((dec, image))
-                            print(overlay)
-                            print(overlay.shape)
-                            writer.add_image(f"test/{i_name} (overlay)", image, epoch + 1)
+                            #overlay = torch.cat((dec, image))
+                            #print(overlay)
+                            #print(overlay.shape)
+                            #writer.add_image(f"test/{i_name} (overlay)", image, epoch + 1)
 
                             writer.add_image(f"test/{i_name} (in)", image, epoch+1)
                             writer.add_image(f"test/{i_name} (out)", dec, epoch+1)
@@ -651,10 +652,10 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
                             bits[n] = 1
                             #print(bits)
                             bits = torch.Tensor(bits)
-                            print("BITS LAB:", bits)
+                            #print("BITS LAB:", bits)
                             dec = net.backward(bits)
-                            print(dec)
-                            print(dec.shape)
+                            #print(dec)
+                            #print(dec.shape)
                             writer.add_image(f"classes/{l}", dec, epoch+1)
                         except Exception as e:
                             print(e)
