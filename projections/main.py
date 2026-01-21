@@ -442,6 +442,7 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
                     return image, label
                 image = transform(image)#[-1]#.resize((1,self.image_dims,self.image_dims))
                 image = image[-1]
+                image = torch.sigmoid(image)
 
                 # print("emb:", emb.shape, "lab:", lab)
 
@@ -617,6 +618,9 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
                             image = Image.open(i_path)
                             image = transform(image)
                             image = torch.Tensor(np.array([image[-1]]))
+                            print(image)
+
+                            #image = torch.sigmoid(image)
                             bits = net(image)
                             print("BITS:", bits[0])
                             dec = net.backward(bits[0])
@@ -627,6 +631,11 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
                             #print(image.shape)
                             #print(image)
                             #dec = transforms.functional.to_pil_image(dec, mode=None)
+                            overlay = torch.cat((dec, image[:,:-1, :-1]))
+                            print(overlay)
+                            print(overlay.shape)
+                            writer.add_image(f"test/{i_name} (overlay)", image, epoch + 1)
+
                             writer.add_image(f"test/{i_name} (in)", image, epoch+1)
                             writer.add_image(f"test/{i_name} (out)", dec, epoch+1)
                         except Exception as e:
@@ -643,7 +652,8 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
                             bits = torch.Tensor(bits)
                             print("BITS LAB:", bits)
                             dec = net.backward(bits)
-                            #print(dec)
+                            print(dec)
+                            print(dec.shape)
                             writer.add_image(f"classes/{l}", dec, epoch+1)
                         except Exception as e:
                             print(e)

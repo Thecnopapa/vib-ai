@@ -19,12 +19,15 @@ def plot_embeddings(dataset, labels, title, score):
 
 # Confusion matrices
 def plot_confusion(preds, labels, title, score, classes):
-    bi.log(1, "Plotting confusion...")
-    cm = confusion_matrix(labels, preds)
-    plt.figure(figsize=(1*len(classes) ,1*len(classes)))
-    sb.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=classes, yticklabels=classes)
-    plt.xlabel("Predicted")
-    plt.ylabel("True")
-    plt.title(f"{title}_S={score:.3f}")
-    os.makedirs("figs", exist_ok=True)
-    plt.savefig(f"figs/{title}_confusion.png")
+    try:
+        bi.log(1, "Plotting confusion...")
+        cm = confusion_matrix(labels, preds)
+        plt.figure(figsize=(1*len(classes) ,1*len(classes)))
+        sb.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=classes, yticklabels=classes)
+        plt.xlabel("Predicted")
+        plt.ylabel("True")
+        plt.title(f"{title}_S={score:.3f}")
+        os.makedirs("figs", exist_ok=True)
+        plt.savefig(f"figs/{title}_confusion.png")
+    except Exception as e:
+        print(e)
