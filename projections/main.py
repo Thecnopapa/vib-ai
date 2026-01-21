@@ -536,16 +536,7 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
         testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=True, num_workers=0)
 
 
-        from torch.utils.tensorboard import SummaryWriter
-        writer = SummaryWriter()
 
-        images = np.array([[trainset.__getitem__(x, as_image=False)[0].numpy()] for x in range(4)])
-        #print(images)
-        labels = [trainset[x][1] for x in range(4)]
-
-        for n, (lab, img) in enumerate(zip(labels, images)):
-            #print(lab, img.shape)
-            writer.add_image(f"input/train ({n})", torch.Tensor(img), 0)
 
 
 
@@ -571,8 +562,10 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
         probs = []
         criterion = nn.CrossEntropyLoss()
 
-        optimizer = optim.AdamW(net.f_net.parameters(), lr=0.001)
+        optimizer = optim.Adam(net.f_net.parameters(), lr=0.001)
         #optimizer = optim.Adam(net.f_net.parameters(), lr=0.002)
+
+
 
 
         #i_criterion = nn.CrossEntropyLoss()
@@ -583,6 +576,22 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
         epochs = 100
         splitsize = len(trainloader) // 10
         print(f"SPLITSIZE: {splitsize}")
+
+        from torch.utils.tensorboard import SummaryWriter
+        import datetime
+        writer = SummaryWriter(log_dir=f"runs/{dataset_name}/{optimizer.__class__.__name__}-{i_optimizer.__class__.__name__}-{datetime.datetime.now()}")
+
+        images = np.array([[trainset.__getitem__(x, as_image=False)[0].numpy()] for x in range(4)])
+        #print(images)
+        labels = [trainset[x][1] for x in range(4)]
+
+        for n, (lab, img) in enumerate(zip(labels, images)):
+            #print(lab, img.shape)
+            writer.add_image(f"input/train ({n})", torch.Tensor(img), 0)
+
+
+
+
         try:
             for epoch in range(epochs):  # loop over the dataset multiple times
                 print(f"\033]0;Training (E={epoch+1}/{epochs})\a")
