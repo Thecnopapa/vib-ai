@@ -339,22 +339,16 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
 
 
         class ImageDataset(Dataset):
-            def __init__(self,   pdb_codes=None, img_folder=None, label_folder=None):
-                print(f"ImageDataset: Loading data ({len(pdb_codes)} ids)")
-                assert img_folder is not None
-                if len(pdb_codes[0]) == 4:
-                    self.has_chains = False
-                    self.has_separated_chains = False
-                elif len(pdb_codes[0]) == 5:
-                    self.has_chains = True
-                    self.has_separated_chains = False
-                elif len(pdb_codes[0]) == 6:
-                    self.has_chains = True
-                    self.has_separated_chains = True
-                    self.separator=pdb_codes[0][4]
-                else:
-                    raise Exception("ImageDataset: provided list is not made of pdb codes and/or chains")
+            def __init__(self,   pdb_codes=None, img_folder=None, label_folder=None, init=True):
+                if init:
+                    print(f"ImageDataset: Loading data ({len(pdb_codes)} ids)")
 
+                    assert img_folder is not None
+                    self.detect_chain_mode(pdb_codes)
+
+
+                else:
+                    print(f"ImageDataset: Not iniliatised yet")
 
                 self.img_folder = img_folder
 
@@ -369,24 +363,50 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
                 self.chains = []
                 self.image_dims = None
 
+                if init:
+                    self.init(pdb_codes)
+
+            def detect_chain_mode(self, codes):
+                codes = list(codes)
+                if len(codes[0]) == 4:
+                    self.has_chains = False
+                    self.has_separated_chains = False
+                elif len(codes[0]) == 5:
+                    self.has_chains = True
+                    self.has_separated_chains = False
+                elif len(codes[0]) == 6:
+                    self.has_chains = True
+                    self.has_separated_chains = True
+                    self.separator = codes[0][4]
+                else:
+                    raise Exception(f"ImageDataset: provided list is not made of pdb codes and/or chains. Provided: {codes[0]}")
+
+            def split(self, pdb_codes, target=0.2):
+                self.detect_chain_mode(pdb_codes)
+                return self.validate_input(pdb_codes, split=True, target=target)
+
+            def init(self, pdb_codes):
                 self.validate_input(pdb_codes)
 
-
                 example_img = Image.open(os.path.join(self.img_folder, self.images[0]))
-                #print(img)
+                # print(img)
                 self.channels = 1
                 self.image_dims = example_img.size[0]
 
-                print(f"ImageDataset: loaded {len(self)} images from {len(self.codes)} pdbs and {len(self.chains)} chains!")
+                print(
+                    f"ImageDataset: loaded {len(self)} images from {len(self.codes)} pdbs and {len(self.chains)} chains!")
 
 
-            def validate_input(self, codes=None):
+            def validate_input(self, codes=None, split=False, target=0.2):
+
+                if split:
+                    splitted = {"test":{}, "train":{}}
 
                 no_label = 0
-
                 valid_chains = []
                 valid_codes = []
                 for file in os.listdir(self.img_folder):
+
                     name = file.split(".")[0]
                     code, chain = name.split("_")
                     if codes is not None:
@@ -416,10 +436,41 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
                         continue
                     valid_chains.append(f"{code}_{chain}")
                     valid_codes.append(code)
+                    if split:
+                        #print(lab,lab in splitted["train"].keys() )
+                        if lab in splitted["train"].keys():
+                            ratio = len(splitted["test"][lab])/len(splitted["train"][lab])
+                            if ratio > target:
+                                splitted["train"][lab].append(f"{code}_{chain}")
+                            else:
+                                splitted["test"][lab].append(f"{code}_{chain}")
+                        else:
+                            splitted["train"][lab] = [f"{code}_{chain}"]
+                            splitted["test"][lab] = []
+                            #print("new lab:", lab)
+                if split:
+                    for lab in splitted["train"].keys():
+                        print("-",lab, len(splitted["train"][lab]), len(splitted["test"][lab]))
+
+
                 if no_label > 0:
                     print(f"ImageDataset: (Warning) Some labels were not found: {no_label}")
+
                 self.codes = sorted(set(valid_codes))
                 self.chains = sorted(set(valid_chains))
+                if split:
+                    tr = []
+                    te = []
+                    for trv, tev in zip(splitted["train"].values(), splitted["test"].values()):
+                        print(trv, tev)
+                        for c in trv:
+                            tr.append(c)
+                        for c in tev:
+                            te.append(c)
+                    #print(json.dumps(splitted["train"],indent=4))
+                    #print(json.dumps(splitted["test"],indent=4))
+                    return tr, te
+
                 return self.chains
 
             def __len__(self):
@@ -465,10 +516,11 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
 
         assert os.path.exists(img_folder)
         print("IMG_FOLDER:", img_folder)
-        structure_list = list(ImageDataset(structure_list, img_folder=img_folder, label_folder="labels").chains)
-        print(len(structure_list))
+        #structure_list = list(ImageDataset(structure_list, img_folder=img_folder, label_folder="labels").chains)
+        #print(len(structure_list))
         #print(structure_list[0:20])
-        train_list, test_list = train_test_split(structure_list, train_size=0.8, test_size=0.2, random_state=42)
+        #train_list, test_list = train_test_split(structure_list, train_size=0.8, test_size=0.2, random_state=42)
+        train_list, test_list = ImageDataset(img_folder=img_folder, label_folder="labels", init=False).split(structure_list)
         print(len(train_list), len(test_list))
         trainset = ImageDataset(train_list, img_folder=img_folder, label_folder="labels")
         testset = ImageDataset(test_list, img_folder=img_folder, label_folder="labels")
@@ -571,7 +623,7 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
                     #fig, ax = plt.subplots(1, 2, figsize=(10, 5))
 
                     i_optimizer.zero_grad()
-                    i_outputs = net.backward(torch.Tensor([truth.numpy()]))[0]
+                    i_outputs = net.backward(torch.Tensor(np.array([truth.numpy()])))[0]
 
                     #print(i_outputs[0].shape, imgs[0].shape, imgs[0, :, :-1, :-1].shape)
                     img = imgs#[0, :, :-1, :-1]
@@ -705,7 +757,7 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
                 #total += labels.size(0)
                 #correct += (predicted == labels).sum().item()
                 for i, l, p in zip(images, labels, predicted):
-                    #print(i, l, p)
+                    #print(i.shape, l, p)
                     pres.append(index_to_label[int(l)])
                     truths.append(index_to_label[int(p)])
 
@@ -715,7 +767,7 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
                     total_pred[index_to_label[int(l)]] += 1
                     total += 1
 
-        print(f'Accuracy of {len(testset)}/{len(trainset)} test images: {100 * correct // total} %')
+        print(f'Accuracy of {len(testset)}/{len(trainset)} test images: {100 * correct /total:.1f} %')
 
 
         from internship.plotting import plot_confusion
