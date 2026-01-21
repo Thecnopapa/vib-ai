@@ -666,9 +666,10 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
                     #if i < 4:
                     #    #print(net.last_decode)
                     #    #writer.add_image(f"output/train ({i})", net.last_decode[0], epoch)
-                    print(
-                        f'[{epoch + 1:2d}, {i%(splitsize+1):5d}] loss: {running_loss / (i % splitsize + 1):5.3f} i-loss: {running_i_loss / (i % splitsize+1):5.3f}',
-                        end="\r")
+                    if os.environ.get("SLURM_CPUS_PER_TASK", None) is None:
+                        print(
+                            f'[{epoch + 1:2d}, {i%(splitsize+1):5d}] loss: {running_loss / (i % splitsize + 1):5.3f} i-loss: {running_i_loss / (i % splitsize+1):5.3f}',
+                            end="\r")
 
                     if i % splitsize == 0 and i != 0:  # print every 1000 mini-batches
                         print(f'[{epoch + 1:2d}, {i:5d}] loss: {running_loss / splitsize:5.3f} i-loss: {running_i_loss / splitsize:5.3f}', end = "\n")
