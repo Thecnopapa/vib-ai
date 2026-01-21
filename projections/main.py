@@ -442,7 +442,7 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
                     return image, label
                 image = transform(image)#[-1]#.resize((1,self.image_dims,self.image_dims))
                 image = image[-1]
-                image = torch.sigmoid(image)
+                #image = torch.sigmoid(image)
 
                 # print("emb:", emb.shape, "lab:", lab)
 
@@ -462,6 +462,7 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
 
 
         img_folder = f"imgs/{mode}"
+
         assert os.path.exists(img_folder)
         print("IMG_FOLDER:", img_folder)
         structure_list = list(ImageDataset(structure_list, img_folder=img_folder, label_folder="labels").chains)
@@ -515,13 +516,15 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
         probs = []
         criterion = nn.CrossEntropyLoss()
 
-        optimizer = optim.SGD(net.f_net.parameters(), lr=0.001)
+        #optimizer = optim.SGD(net.f_net.parameters(), lr=0.001)
+        optimizer = optim.Adam(net.f_net.parameters(), lr=0.001)
+
 
         #i_criterion = nn.CrossEntropyLoss()
         from models import DiceLoss
         i_criterion = DiceLoss
-        i_optimizer = optim.SGD(net.r_net.parameters(), lr=0.001)
-
+        #i_optimizer = optim.SGD(net.r_net.parameters(), lr=0.001)
+        i_optimizer = optim.Adam(net.r_net.parameters(), lr=0.001)
         epochs = 42
         splitsize = len(trainloader) // 10
         print(f"SPLITSIZE: {splitsize}")
@@ -551,8 +554,8 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
 
                     outputs = net(imgs)
                     pred = torch.max(outputs, 1).indices[0].numpy()
-                    truth = [0]*len(labs)
-                    truth[labels[0]] = 1
+                    truth = [0.]*len(labs)
+                    truth[labels[0.]] = 1.
                     truth = torch.Tensor(truth)
                     #print()
                     #print("TRUTH:", truth)
@@ -572,7 +575,7 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
                     i_outputs = net.backward(torch.Tensor([truth.numpy()]))[0]
 
                     #print(i_outputs[0].shape, imgs[0].shape, imgs[0, :, :-1, :-1].shape)
-                    img = imgs[0, :, :-1, :-1]
+                    img = imgs#[0, :, :-1, :-1]
                     #print(img)
                     #img = nn.Softmax(dim=1)(img)
                     #out = nn.Softmax(dim=1)(i_outputs[0])
@@ -631,7 +634,7 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
                             #print(image.shape)
                             #print(image)
                             #dec = transforms.functional.to_pil_image(dec, mode=None)
-                            overlay = torch.cat((dec, image[:,:-1, :-1]))
+                            overlay = torch.cat((dec, image))
                             print(overlay)
                             print(overlay.shape)
                             writer.add_image(f"test/{i_name} (overlay)", image, epoch + 1)
@@ -640,7 +643,7 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
                             writer.add_image(f"test/{i_name} (out)", dec, epoch+1)
                         except Exception as e:
                             print(e)
-                            exit()
+                            #exit()
                             continue
                     for l in labs:
                         try:

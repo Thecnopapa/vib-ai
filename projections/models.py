@@ -113,6 +113,7 @@ class SmallNetv2(nn.Module):
             nn.ReLU(),
 
             nn.Linear(fig_size * 2, fig_size),
+            nn.ReLU(),
             nn.Linear(fig_size, n_features),
             nn.Softmax(dim=1)
         ]
@@ -121,12 +122,15 @@ class SmallNetv2(nn.Module):
 
         r_layers = [
             nn.Linear(n_features, fig_size),
+            nn.ReLU(),
             nn.Linear(fig_size, fig_size * 2),
+            nn.ReLU(),
             nn.Linear(fig_size * 2,
                       int(self.red_fig_size / 2) * n_chanels * 2 * self.red_fig_size * n_chanels * 4),
             nn.Unflatten(-1, (self.n_chanels * 4, self.red_fig_size, self.red_fig_size)),
             nn.ConvTranspose2d(n_chanels * 4, n_chanels * 2, self.kernel2, stride=self.stride2),
-            nn.ConvTranspose2d(n_chanels * 2, n_chanels, self.kernel1, stride=self.stride1),
+            nn.ReLU(),
+            nn.ConvTranspose2d(n_chanels * 2, n_chanels, self.kernel1, stride=self.stride1, output_padding=1),
             #nn.Softmax(dim=2)
 
         ]
