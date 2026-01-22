@@ -258,6 +258,10 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
         from models import SmallNetv2 as SmallNet
         M = SmallNet
 
+    elif "small3" in sys.argv:
+        from models import SmallNetv3 as SmallNet
+        M = SmallNet
+
     if "mega" in sys.argv:
         dataset_name = "mega"
         file_folder = bi.biopython.downloadPDB("../internship/data", "mega-batch",
@@ -562,7 +566,7 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
         probs = []
         criterion = nn.CrossEntropyLoss()
 
-        optimizer = optim.Adam(net.f_net.parameters(), lr=0.001)
+        optimizer = optim.Adamax(net.f_net.parameters(), lr=0.001)
         #optimizer = optim.Adam(net.f_net.parameters(), lr=0.002)
 
 
@@ -682,6 +686,8 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
                     for i_name in ["1M2Z_A", "1AQK_L", "1BWW_A", "1GLU_A"]:
                         try:
                             i_path = f"imgs/{mode}/{i_name}.png"
+                            l_path = f"labels/{i_name[:4]}.labels.json"
+
                             image = Image.open(i_path)
                             image = transform(image)
                             image = torch.Tensor(np.array([image[-1]]))
@@ -702,7 +708,15 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
                             #print(overlay)
                             #print(overlay.shape)
                             #writer.add_image(f"test/{i_name} (overlay)", image, epoch + 1)
-
+                            true_lab = label_to_index[json.load(open(l_path, "r"))[i_name[-1]]["label"]]
+                            true_bits = [0] * len(labs)
+                            # print(bits)
+                            true_bits[true_lab] = 1
+                            # print(bits)
+                            true_bits = torch.Tensor(true_bits)
+                            # print("BITS LAB:", bits)
+                            true_img = net.backward(true_bits)
+                            writer.add_image(f"test/{i_name} (class)", true_img, epoch + 1)
                             writer.add_image(f"test/{i_name} (in)", image, epoch+1)
                             writer.add_image(f"test/{i_name} (out)", dec, epoch+1)
                         except Exception as e:
@@ -852,7 +866,9 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
     if view:
         print("\033]0;Viewing\a")
         from torchview import draw_graph
-        model_graph = draw_graph(M(n_features=6, fig_size=128, n_chanels=1), input_size=(1, 1, 128, 128),
+        model_path = f"{M(1).__class__.__name__}_{mode}_{dataset_name}.model.pth"
+        model_data = json.load(open(model_path.split(".")[0] + ".model.data.json"))
+        model_graph = draw_graph(M(n_features=model_data["n_features"], fig_size=128, n_chanels=1), input_size=(1, 1, 128, 128),
                                  expand_nested=True,
                                  graph_name="graph_1",
                                  save_graph=True,
