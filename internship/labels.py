@@ -1,5 +1,7 @@
 
 
+
+
 import os, sys, subprocess, json
 
 from bioiain.tools.DSSP import ss_to_index
@@ -19,7 +21,17 @@ from bioiain.visualisation import quick_display
 def generate_labels(name, structure=None):
     label_dict = {c.id: {} for c in structure.get_chains() if len(c) >0}
     method = config["labels"]["selected"]["method"]
-    if method== "dssp":
+    if method == "interactions":
+
+        from interactions import generate_dimers
+        labs = generate_dimers(name, "data/" + config["data"]["selected"]["folder_name"])
+        print(name)
+
+        print(labs)
+        exit()
+
+
+    elif method== "dssp":
         bi.log(3, "Selected method: DSSP")
         from bioiain.tools import run_dssp
         try:

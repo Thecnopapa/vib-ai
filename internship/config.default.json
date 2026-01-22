@@ -19,6 +19,13 @@
     },
     "labels": {
         "default": "dssp",
+        "interactions": {
+                    "method": "interactions",
+                    "save_folder": "labels/interactions",
+                    "raw_folder": "raw/interactions",
+                    "abbreviation": "ppi",
+                    "classes": ["S", "H" ,"E","#"]
+                },
         "dssp": {
             "method": "dssp",
             "save_folder": "labels/dssp",
