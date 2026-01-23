@@ -595,7 +595,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
 
 
 
-        net = M(len(labs), n_chanels=trainset.channels, fig_size=trainset.image_dims)
+        net = M(len(labs), n_channels=trainset.channels, fig_size=trainset.image_dims)
         data = {}
         data["model_name"] = f"{net.__class__.__name__}_{mode}_{dataset_name}"
         data["name"] = str(net.__class__.__name__)
@@ -616,14 +616,14 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
         probs = []
         criterion = nn.CrossEntropyLoss()
 
-        optimizer = optim.Adamax(net.f_net.parameters(), lr=0.001)
+        optimizer = optim.Adam(net.f_net.parameters(), lr=0.001)
         #optimizer = optim.Adam(net.f_net.parameters(), lr=0.002)
 
 
 
 
         #i_criterion = nn.CrossEntropyLoss()
-        from models import DiceLoss
+        from models import DiceLoss, SimpleLoss
         i_criterion = DiceLoss
         #i_optimizer = optim.SGD(net.r_net.parameters(), lr=0.001)
         i_optimizer = optim.Adam(net.r_net.parameters(), lr=0.001)
@@ -685,18 +685,22 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
                     optimizer.zero_grad()
 
                     outputs = net(imgs)
-                    pred = torch.max(outputs, 1).indices[0].numpy()
+                    pred = torch.max(outputs, 1).indices[0]
+                    #print(pred)
                     truth = [0.]*len(labs)
                     #print(labels)
                     truth[labels[0]] = 1.
                     truth = torch.Tensor(truth)
+                    truth = truth.reshape(1,*truth.shape)
                     #print()
                     #print("TRUTH:", truth)
                     #print(outputs, m, outputs[0][m], truth[m])
 
                     #print(outputs.shape, truth.shape)
                     #print(outputs, truth.numpy())
-                    loss = criterion(outputs[0], truth)
+                    #print(outputs)
+                    #print(truth)
+                    loss = criterion(outputs, truth)
                     loss.backward(retain_graph=True)
 
                     #print("LOSS:", loss.item())
@@ -705,7 +709,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
                     #fig, ax = plt.subplots(1, 2, figsize=(10, 5))
 
                     i_optimizer.zero_grad()
-                    i_outputs = net.backward(torch.Tensor(np.array([truth.numpy()])))[0]
+                    i_outputs = net.backward(truth)
 
                     #print(i_outputs[0].shape, imgs[0].shape, imgs[0, :, :-1, :-1].shape)
                     img = imgs#[0, :, :-1, :-1]
@@ -743,8 +747,8 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
 
                     if i % splitsize == 0 and i != 0:  # print every 1000 mini-batches
                         print(f'[{epoch + 1:2d}, {i:5d}] loss: {running_loss / splitsize:5.3f} i-loss: {running_i_loss / splitsize:5.3f}', end = "\n")
-                        writer.add_scalar("loss/encode", running_loss / splitsize, epoch+1)
-                        writer.add_scalar("loss/decode", running_i_loss / splitsize, epoch + 1)
+                        writer.add_scalar("loss/encode", running_loss / splitsize, epoch*10+i//splitsize)
+                        writer.add_scalar("loss/decode", running_i_loss / splitsize, epoch*10+i//splitsize)
                         running_loss = 0.0
                         running_i_loss = 0.0
 
@@ -828,7 +832,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
         #images, labels = next(dataiter)
 
         try:
-            net = M(n_features = len(labs), n_chanels=trainset.channels, fig_size=trainset.image_dims)
+            net = M(n_features = len(labs), n_channels=trainset.channels, fig_size=trainset.image_dims)
             net.load_state_dict(torch.load(PATH, weights_only=True))
         except:
             print("Temp model does not match!")
@@ -951,13 +955,13 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
         from torchview import draw_graph
         model_path = f"{M(1).__class__.__name__}_{mode}_{dataset_name}.model.pth"
         model_data = json.load(open(model_path.split(".")[0] + ".model.data.json"))
-        model_graph = draw_graph(M(n_features=model_data["n_features"], fig_size=28, n_chanels=1), input_size=(1, 10),
+        model_graph = draw_graph(M(n_features=model_data["n_features"], fig_size=28, n_channels=1), input_size=(1, 28, 28),
                                  expand_nested=True,
                                  graph_name="graph_1",
                                  save_graph=True,
                                  )
-        model_graph.visual_graph
-        input("Press Enter to continue...")
+        #model_graph.visual_graph
+        #input("Press Enter to continue...")
 
     if decode:
         print("\033]0;Decoding\a")
@@ -977,7 +981,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
             model_data = json.load(open(model_path.split(".")[0] + ".model.data.json"))
 
             n_features = model_data["n_features"]
-            net = M(n_features=n_features, fig_size=model_data["fig_size"], n_chanels=model_data["n_channels"])
+            net = M(n_features=n_features, fig_size=model_data["fig_size"], n_channels=model_data["n_channels"])
 
             print("N FEATURES:", n_features)
             #print(model_data["index_to_label"])

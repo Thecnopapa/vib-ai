@@ -19,7 +19,7 @@ def SimpleLoss(pred, target, smoot=None, show=False):
 
 
 
-def DiceLoss(pred, target, smooth=1, show=False):
+def DiceLoss(pred, target, smooth=0, show=False):
 
     # Apply sigmoid to convert logits to probabilities
 
@@ -104,27 +104,31 @@ def test_layer(x):
 
 
 class SmallNetQMINST(nn.Module):
-    def __init__(self, n_features=10, n_chanels=1, fig_size=28):
+    def __init__(self, n_features=10, n_channels=1, fig_size=28, batch_size=1):
         super().__init__()
         self.n_features = n_features
-        self.n_chanels = n_chanels
+        self.n_channels = n_channels
         self.fig_size = fig_size
+        self.inner_figs = [int(self.fig_size/2)]
+        self.channels = [self.n_channels, 32]
 
         f_layers = [
+
+            nn.Conv2d(self.channels[0], self.channels[1], 3, stride=2, padding=1), # 1, 32, 14, 14
             nn.ReLU(),
-            nn.Flatten(),
-            nn.Linear(28 * 28 * self.n_chanels, n_features),
+            nn.Flatten(), # 1,6272
+            nn.Linear(self.inner_figs[0] * self.inner_figs[0] * self.channels[1], n_features),
             nn.Softmax(dim=-1)
         ]
 
 
 
         r_layers = [
-            nn.Linear(n_features, 28 * 28 * self.n_chanels),
-            nn.Unflatten(-1, (self.n_chanels, 28, 28)),
-
+            nn.Linear(n_features, self.inner_figs[0] * self.inner_figs[0] * self.channels[1]),
+            nn.Unflatten(-1, (self.channels[1], self.inner_figs[0], self.inner_figs[0])),
             nn.ReLU(),
-
+            nn.ConvTranspose2d(self.channels[1], self.channels[0], 3, stride=2, padding=1, output_padding=1),
+            nn.Softmax(dim=-1)
         ]
         self.f_net = nn.Sequential(*f_layers)
         self.r_net = nn.Sequential(*r_layers)
@@ -141,13 +145,13 @@ class SmallNetQMINST(nn.Module):
 
 
 class SmallNetv3(nn.Module):
-    def __init__(self, n_features=10, n_chanels=1, fig_size=28):
+    def __init__(self, n_features=10, n_channels=1, fig_size=28):
         super().__init__()
         self.n_features = n_features
-        self.n_chanels = n_chanels
+        self.n_channels = n_channels
         self.fig_size = fig_size
         print("FIG_SIZE", self.fig_size)
-        print("N_CHANNELS =", n_chanels)
+        print("N_CHANNELS =", n_channels)
         #assert fig_size % 32 == 0
         self.kernel1 = 5
         self.stride1 = 2
@@ -159,7 +163,7 @@ class SmallNetv3(nn.Module):
         assert self.red_fig_size % 2 == 0
 
         f_layers = [
-            nn.Conv2d(n_chanels, 32, 3, stride=2, padding=1),
+            nn.Conv2d(n_channels, 32, 3, stride=2, padding=1),
             nn.ReLU(),
             nn.Conv2d(32, 64, 3, stride=2, padding=1),
             nn.ReLU(),
@@ -174,14 +178,14 @@ class SmallNetv3(nn.Module):
             #nn.Softmax(dim=1)
         ]
 
-        print("CONV2 flat:", n_chanels * 2 * int(self.red_fig_size / 2) * self.red_fig_size)
+        print("CONV2 flat:", n_channels * 2 * int(self.red_fig_size / 2) * self.red_fig_size)
 
         r_layers = [
             nn.Linear(n_features, 128 * 16 *16),
             nn.ReLU(),
             #nn.Linear(fig_size*2, fig_size * 4),
             #nn.ReLU(),
-            #nn.Linear(fig_size * 4, int(self.fig_size / 2) * n_chanels*2 *int(self.fig_size/2)),
+            #nn.Linear(fig_size * 4, int(self.fig_size / 2) * n_channels*2 *int(self.fig_size/2)),
             nn.Unflatten(-1, (128, 16, 16)),
             #nn.ReLU(),
             nn.ConvTranspose2d(128, 64, 3, 2, padding=1, output_padding=1),
@@ -190,7 +194,7 @@ class SmallNetv3(nn.Module):
             nn.ReLU(),
             nn.ConvTranspose2d(32, 1, 3, 2, padding=1, output_padding=1),
             #nn.ReLU(),
-            #nn.ConvTranspose2d(n_chanels * 2, n_chanels, self.kernel1, stride=self.stride1, padding=2, output_padding=1),
+            #nn.ConvTranspose2d(n_channels * 2, n_channels, self.kernel1, stride=self.stride1, padding=2, output_padding=1),
             #nn.Softmax(dim=2)
 
         ]
@@ -211,13 +215,13 @@ class SmallNetv3(nn.Module):
 
 
 class SmallNetv2(nn.Module):
-    def __init__(self, n_features=None, n_chanels=1, fig_size=128):
+    def __init__(self, n_features=None, n_channels=1, fig_size=128):
         super().__init__()
         self.n_features = n_features
-        self.n_chanels = n_chanels
+        self.n_channels = n_channels
         self.fig_size = fig_size
         print("FIG_SIZE", self.fig_size)
-        print("N_CHANNELS =", n_chanels)
+        print("N_CHANNELS =", n_channels)
         assert fig_size % 32 == 0
         self.kernel1 = 5
         self.stride1 = 2
@@ -229,13 +233,13 @@ class SmallNetv2(nn.Module):
         assert self.red_fig_size % 2 == 0
 
         f_layers = [
-            nn.Conv2d(n_chanels, n_chanels * 2, self.kernel1, stride=self.stride1),
+            nn.Conv2d(n_channels, n_channels * 2, self.kernel1, stride=self.stride1),
             nn.ReLU(),
-            nn.Conv2d(n_chanels * 2, n_chanels * 4, self.kernel2, stride=self.stride2),
+            nn.Conv2d(n_channels * 2, n_channels * 4, self.kernel2, stride=self.stride2),
             nn.ReLU(),
 
             nn.Flatten(),
-            nn.Linear(int(self.red_fig_size / 2) * n_chanels * 2 * self.red_fig_size * n_chanels * 4,
+            nn.Linear(int(self.red_fig_size / 2) * n_channels * 2 * self.red_fig_size * n_channels * 4,
                       fig_size * 2),
             nn.ReLU(),
 
@@ -245,7 +249,7 @@ class SmallNetv2(nn.Module):
             nn.Softmax(dim=1)
         ]
 
-        print("CONV2 flat:", n_chanels * 2 * int(self.red_fig_size / 2) * self.red_fig_size)
+        print("CONV2 flat:", n_channels * 2 * int(self.red_fig_size / 2) * self.red_fig_size)
 
         r_layers = [
             nn.Linear(n_features, fig_size),
@@ -253,12 +257,12 @@ class SmallNetv2(nn.Module):
             nn.Linear(fig_size, fig_size * 2),
             nn.ReLU(),
             nn.Linear(fig_size * 2,
-                      int(self.red_fig_size / 2) * n_chanels * 2 * self.red_fig_size * n_chanels * 4),
-            nn.Unflatten(-1, (self.n_chanels * 4, self.red_fig_size, self.red_fig_size)),
+                      int(self.red_fig_size / 2) * n_channels * 2 * self.red_fig_size * n_channels * 4),
+            nn.Unflatten(-1, (self.n_channels * 4, self.red_fig_size, self.red_fig_size)),
             nn.ReLU(),
-            nn.ConvTranspose2d(n_chanels * 4, n_chanels * 2, self.kernel2, stride=self.stride2),
+            nn.ConvTranspose2d(n_channels * 4, n_channels * 2, self.kernel2, stride=self.stride2),
             nn.ReLU(),
-            nn.ConvTranspose2d(n_chanels * 2, n_chanels, self.kernel1, stride=self.stride1, output_padding=1),
+            nn.ConvTranspose2d(n_channels * 2, n_channels, self.kernel1, stride=self.stride1, output_padding=1),
             #nn.Softmax(dim=2)
 
         ]
@@ -278,13 +282,13 @@ class SmallNetv2(nn.Module):
 
 
 class SmallNet(nn.Module):
-    def __init__(self, n_features=10, n_chanels=4, fig_size=64, decode=False):
+    def __init__(self, n_features=10, n_channels=4, fig_size=64, decode=False):
         super().__init__()
         self.n_features = n_features
-        self.n_chanels = n_chanels
+        self.n_channels = n_channels
         self.fig_size = fig_size
         print("FIG_SIZE", self.fig_size)
-        print("N_CHANNELS =", n_chanels)
+        print("N_CHANNELS =", n_channels)
         assert fig_size % 32 == 0
         self.kernel1 = 5
         self.stride1 = 2
@@ -292,16 +296,16 @@ class SmallNet(nn.Module):
         self.stride2 = 2
         print("KERNELS:", self.kernel1, self.kernel2)
 
-        self.conv1 = nn.Conv2d(n_chanels, n_chanels * 2, self.kernel1, stride=self.stride1)
-        self.conv2 = nn.Conv2d(n_chanels * 2, n_chanels * 4, self.kernel2, stride=self.stride2)
+        self.conv1 = nn.Conv2d(n_channels, n_channels * 2, self.kernel1, stride=self.stride1)
+        self.conv2 = nn.Conv2d(n_channels * 2, n_channels * 4, self.kernel2, stride=self.stride2)
         #self.red_fig_size = self.fig_size - self.kernel2 - self.kernel1 +
         self.red_fig_size = 30
 
         print("RED_FIG_SIZE =", self.red_fig_size)
         assert self.red_fig_size % 2 == 0
-        print("CONV2 flat:", n_chanels * 2 * int(self.red_fig_size / 2) * self.red_fig_size)
+        print("CONV2 flat:", n_channels * 2 * int(self.red_fig_size / 2) * self.red_fig_size)
 
-        self.fc1 = nn.Linear(int(self.red_fig_size / 2) * n_chanels * 2 * self.red_fig_size * n_chanels * 4,
+        self.fc1 = nn.Linear(int(self.red_fig_size / 2) * n_channels * 2 * self.red_fig_size * n_channels * 4,
                              fig_size * 2)
         self.fc2 = nn.Linear(fig_size * 2, fig_size)
         self.fc3 = nn.Linear(fig_size, n_features)
@@ -309,9 +313,9 @@ class SmallNet(nn.Module):
         self.rfc3 = nn.Linear(n_features, fig_size)
         self.rfc2 = nn.Linear(fig_size, fig_size * 2)
         self.rfc1 = nn.Linear(fig_size * 2,
-                              int(self.red_fig_size / 2) * n_chanels * 2 * self.red_fig_size * n_chanels * 4)
-        self.rconv2 = nn.ConvTranspose2d(n_chanels * 4, n_chanels * 2, self.kernel2, stride=self.stride2)
-        self.rconv1 = nn.ConvTranspose2d(n_chanels * 2, n_chanels, self.kernel1, stride=self.stride1)
+                              int(self.red_fig_size / 2) * n_channels * 2 * self.red_fig_size * n_channels * 4)
+        self.rconv2 = nn.ConvTranspose2d(n_channels * 4, n_channels * 2, self.kernel2, stride=self.stride2)
+        self.rconv1 = nn.ConvTranspose2d(n_channels * 2, n_channels, self.kernel1, stride=self.stride1)
 
     def forward(self, x):
         # [4, n_channels, 32, 32] / [4, n_channels, 100, 100]
@@ -345,7 +349,7 @@ class SmallNet(nn.Module):
         x = self.rfc3(x)
         x = self.rfc2(x)
         x = self.rfc1(x)
-        x = torch.unflatten(x, -1, (self.n_chanels * 4, self.red_fig_size, self.red_fig_size))
+        x = torch.unflatten(x, -1, (self.n_channels * 4, self.red_fig_size, self.red_fig_size))
         x = self.rconv2(x)
         x = self.rconv1(x)
         self.last_decode = x
@@ -355,27 +359,27 @@ class SmallNet(nn.Module):
 
 
 class Net(nn.Module):
-    def __init__(self, n_features=10, n_chanels=4, fig_size=64, decode=False):
+    def __init__(self, n_features=10, n_channels=4, fig_size=64, decode=False):
         super().__init__()
         self.n_features = n_features
-        self.n_chanels = n_chanels
+        self.n_channels = n_channels
         self.fig_size = fig_size
         print("FIG_SIZE", self.fig_size)
-        print("N_CHANNELS =", n_chanels)
+        print("N_CHANNELS =", n_channels)
         assert fig_size % 32 == 0
         self.kernel1 = 4
         self.kernel2 = 4
         print("KERNELS:", self.kernel1, self.kernel2)
 
-        self.conv1 = nn.Conv2d(n_chanels, n_chanels * 2, self.kernel1, stride=1)
-        self.conv2 = nn.Conv2d(n_chanels * 2, n_chanels * 4, self.kernel2)
+        self.conv1 = nn.Conv2d(n_channels, n_channels * 2, self.kernel1, stride=1)
+        self.conv2 = nn.Conv2d(n_channels * 2, n_channels * 4, self.kernel2)
         self.red_fig_size = self.fig_size - self.kernel2 - self.kernel1 + 2
 
         print("RED_FIG_SIZE =", self.red_fig_size)
         assert self.red_fig_size % 2 == 0
-        print("CONV2 flat:", n_chanels * 2 * int(self.red_fig_size / 2) * self.red_fig_size)
+        print("CONV2 flat:", n_channels * 2 * int(self.red_fig_size / 2) * self.red_fig_size)
 
-        self.fc1 = nn.Linear(int(self.red_fig_size / 2) * n_chanels * 2 * self.red_fig_size * n_chanels * 4,
+        self.fc1 = nn.Linear(int(self.red_fig_size / 2) * n_channels * 2 * self.red_fig_size * n_channels * 4,
                              fig_size * 2)
         self.fc2 = nn.Linear(fig_size * 2, fig_size)
         self.fc3 = nn.Linear(fig_size, n_features)
@@ -383,9 +387,9 @@ class Net(nn.Module):
         self.rfc3 = nn.Linear(n_features, fig_size)
         self.rfc2 = nn.Linear(fig_size, fig_size * 2)
         self.rfc1 = nn.Linear(fig_size * 2,
-                              int(self.red_fig_size / 2) * n_chanels * 2 * self.red_fig_size * n_chanels * 4)
-        self.rconv2 = nn.ConvTranspose2d(n_chanels * 4, n_chanels * 2, self.kernel2)
-        self.rconv1 = nn.ConvTranspose2d(n_chanels * 2, n_chanels, self.kernel1, stride=1)
+                              int(self.red_fig_size / 2) * n_channels * 2 * self.red_fig_size * n_channels * 4)
+        self.rconv2 = nn.ConvTranspose2d(n_channels * 4, n_channels * 2, self.kernel2)
+        self.rconv1 = nn.ConvTranspose2d(n_channels * 2, n_channels, self.kernel1, stride=1)
 
     def forward(self, x):
         # [4, n_channels, 32, 32] / [4, n_channels, 100, 100]
@@ -425,7 +429,7 @@ class Net(nn.Module):
         print(x)
         x = self.rfc1(x)
         print(x.shape)
-        x = torch.unflatten(x, -1, (self.n_chanels * 4, self.red_fig_size, self.red_fig_size))
+        x = torch.unflatten(x, -1, (self.n_channels * 4, self.red_fig_size, self.red_fig_size))
         print(x)
         print(x.shape)
         for n, (t, b) in enumerate(zip(x, self.rconv2._bias)):
