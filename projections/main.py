@@ -241,7 +241,7 @@ def get_PCA(force=False, labs=True, images=True):
 
 
 
-def image_classifier(mode="double_connected", train = True, decode=False, view=False, temp=False):
+def image_classifier(mode="connected", train = True, decode=False, view=False, temp=False):
     import torchvision.transforms as transforms
     from torch.utils.data import Dataset
     from PIL import Image
@@ -343,6 +343,11 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
 
         labs = index_to_label.values()
         all_labs = label_to_index.keys()
+        import torchvision
+        QMNIST = torchvision.datasets.QMNIST("datasets", download = True)
+        print(QMNIST)
+        print(QMNIST[1])
+        
 
 
         class ImageDataset(Dataset):
@@ -520,24 +525,36 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
 
 
         img_folder = f"imgs/{mode}"
-
-        assert os.path.exists(img_folder)
-        print("IMG_FOLDER:", img_folder)
-        #structure_list = list(ImageDataset(structure_list, img_folder=img_folder, label_folder="labels").chains)
-        #print(len(structure_list))
-        #print(structure_list[0:20])
-        #train_list, test_list = train_test_split(structure_list, train_size=0.8, test_size=0.2, random_state=42)
-        train_list, test_list = ImageDataset(img_folder=img_folder, label_folder="labels", init=False).split(structure_list)
-        print(len(train_list), len(test_list))
-        trainset = ImageDataset(train_list, img_folder=img_folder, label_folder="labels")
-        testset = ImageDataset(test_list, img_folder=img_folder, label_folder="labels")
+        if "QMNIST" in sys.argv:
+            trainset = torchvision.datasets.QMNIST("datasets", download=True, what="train")
+            testset = torchvision.datasets.QMNIST("datasets", download=True, what="test10k")          
+            trainset.channels = 1
+            trainset.image_dims = 28
+        else:
+            assert os.path.exists(img_folder)
+            print("IMG_FOLDER:", img_folder)
+            #structure_list = list(ImageDataset(structure_list, img_folder=img_folder, label_folder="labels").chains)
+            #print(len(structure_list))
+            #print(structure_list[0:20])
+            #train_list, test_list = train_test_split(structure_list, train_size=0.8, test_size=0.2, random_state=42)
+            train_list, test_list = ImageDataset(img_folder=img_folder, label_folder="labels", init=False).split(structure_list)
+            print(len(train_list), len(test_list))
+            trainset = ImageDataset(train_list, img_folder=img_folder, label_folder="labels")
+            testset = ImageDataset(test_list, img_folder=img_folder, label_folder="labels")
 
         print(f"ACTUAL VALID DATA [(img+label)/chain]: \033[0;36m{len(trainset)+len(testset)}\033[0m test/train: {len(testset)}/{len(trainset)} ({len(testset)/len(trainset):.2f})")
 
 
         from parallel import cpu_count
-        trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=0)
-        testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=True, num_workers=0)
+        collate_fn = None
+        if "QMNIST" in sys.argv:
+            def collate_fn(x):
+                
+                return [(torchvision.transforms.functional.pil_to_tensor(y[0]), y[1]) for y in x]
+            labs = list(set([x[1] for x in trainset]))
+
+        trainloader = torch.utils.data.DataLoader(trainset, batch_size=1, shuffle=True, num_workers=0, collate_fn=collate_fn)
+        testloader = torch.utils.data.DataLoader(testset, batch_size=1, shuffle=True, num_workers=0, collate_fn=collate_fn)
 
 
 
@@ -576,7 +593,7 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
         from models import DiceLoss
         i_criterion = DiceLoss
         #i_optimizer = optim.SGD(net.r_net.parameters(), lr=0.001)
-        i_optimizer = optim.AdamW(net.r_net.parameters(), lr=0.001)
+        i_optimizer = optim.Adam(net.r_net.parameters(), lr=0.001)
         epochs = 100
         splitsize = len(trainloader) // 10
         print(f"SPLITSIZE: {splitsize}")
@@ -584,14 +601,19 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
         from torch.utils.tensorboard import SummaryWriter
         import datetime
         writer = SummaryWriter(log_dir=f"runs/{dataset_name}/{optimizer.__class__.__name__}-{i_optimizer.__class__.__name__}-{datetime.datetime.now()}")
+        
+        n_samples = 20
 
-        images = np.array([[trainset.__getitem__(x, as_image=False)[0].numpy()] for x in range(4)])
+        if "QMNIST" in sys.argv:
+            images = np.array([torchvision.transforms.functional.pil_to_tensor(trainset[x][0]).numpy() for x in range(n_samples)])
+        else:
+            images = np.array([[trainset.__getitem__(x, as_image=False)[0].numpy()] for x in range(n_samples)])
         #print(images)
-        labels = [trainset[x][1] for x in range(4)]
+        labels = [trainset[x][1] for x in range(n_samples)]
 
         for n, (lab, img) in enumerate(zip(labels, images)):
             #print(lab, img.shape)
-            writer.add_image(f"input/train ({n})", torch.Tensor(img), 0)
+            writer.add_image(f"input/train ({lab})", torch.Tensor(img), 0)
 
 
 
@@ -609,19 +631,31 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
                 running_i_loss = 0.0
                 if os.environ.get("SLURM_CPUS_PER_TASK", None) is None:
                     print(f'[{epoch + 1}, {0:5d}] loss: {running_loss / 10:.3f}', end="\r")
-
-                for i, d in enumerate(trainloader, 0):
-                    # get the inputs; data is a list of [inputs, labels]
-                    imgs, labels = d
+            
+                for i, d in enumerate(trainloader):
+                    #print(i, d)
+                    if "QMNIST" in sys.argv:
+                        # get the inputs; data is a list of [inputs, labels]
+                        imgs, labels = [x[0] for x in d][0], [x[1] for x in d]
+                    else:
+                        imgs, labels = d
+                    #print(imgs, labels)
                     if len(imgs.shape) == 3:
                         imgs = imgs.reshape([1, *imgs.shape])
-
+                    #print(imgs)
+                    if "QMNIST" in sys.argv:
+                        imgs = imgs / 256
+                    #print("IMG:")
+                    #print(imgs)
+                    #print(imgs.shape)
+                    #exit()
                     # zero the parameter gradients
                     optimizer.zero_grad()
 
                     outputs = net(imgs)
                     pred = torch.max(outputs, 1).indices[0].numpy()
                     truth = [0.]*len(labs)
+                    #print(labels)
                     truth[labels[0]] = 1.
                     truth = torch.Tensor(truth)
                     #print()
@@ -657,7 +691,7 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
 
                     #print(img)
                     #print(i_outputs[0])
-                    i_loss = i_criterion(i_outputs[0], img[0])
+                    i_loss = i_criterion(i_outputs[0], img[0], show=False)
                     #print("I-LOSS:", i_loss.item())
                     #print(i_loss.item())
                     i_loss.backward()
@@ -682,7 +716,8 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
                         running_loss = 0.0
                         running_i_loss = 0.0
 
-                with torch.no_grad():
+                if False:
+                #with torch.no_grad():
                     for i_name in ["1M2Z_A", "1AQK_L", "1BWW_A", "1GLU_A"]:
                         try:
                             i_path = f"imgs/{mode}/{i_name}.png"
@@ -723,22 +758,27 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
                             print(e)
                             #exit()
                             continue
+                with torch.no_grad():
+                    print(labs)
                     for l in labs:
                         try:
                             bits = [0]*len(labs)
-                            #print(bits)
-                            n = label_to_index[l]
+                            print(bits)
+                            if "QMNIST" in sys.argv:
+                                n = int(l)
+                            else:
+                                n = label_to_index[l]
                             bits[n] = 1
-                            #print(bits)
+                            print(bits)
                             bits = torch.Tensor(bits)
-                            #print("BITS LAB:", bits)
+                            print("BITS LAB:", bits)
                             dec = net.backward(bits)
-                            #print(dec)
-                            #print(dec.shape)
+                            print(dec)
+                            print(dec.shape)
                             writer.add_image(f"classes/{l}", dec, epoch+1)
                         except Exception as e:
                             print(e)
-                            exit()
+                            raise e
                             continue
             print()
             print('Finished Training ({} epochs)'.format(epochs))
@@ -770,15 +810,26 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
         total = 0
         pres = []
         truths = []
-
+        if "QMNIST" in sys.argv:
+            index_to_label = label_to_index = {k:k for k in labs}
         correct_pred = {classname: 0 for classname in sorted(labs)}
         total_pred = {classname: 0 for classname in sorted(labs)}
         # since we're not training, we don't need to calculate the gradients for our outputs
         with torch.no_grad():
             for data in testloader:
-                images, labels = data
+                if "QMNIST" in sys.argv:
+                    images, labels = [x[0] for x in d][0], [x[1] for x in d]
+                else: 
+                    images, labels = data
+                #print(imgs, labels)
+                if len(images.shape) == 3:
+                    images = images.reshape([1, *imgs.shape])
+                #print(imgs)
+                if "QMNIST" in sys.argv:
+                    images = images / 256
+                
                 # calculate outputs by running images through the network
-                outputs = net(images)
+                outputs = net(images[0])
                 # the class with the highest energy is what we choose as prediction
                 _, predicted = torch.max(outputs, 1)
                 #total += labels.size(0)
@@ -829,8 +880,8 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
         #print(df)
         #print("LEXSORTED:", df.index.is_monotonic_increasing, )
 
-
-        for classname, correct_count in sorted([(k,v) for k, v in correct_pred.items() if k in labs], key=lambda x: n_labs[x[0]], reverse=True):
+        
+        for classname, correct_count in sorted([(k,v) for k, v in correct_pred.items() if k in labs], key=lambda x: labs[x[0]], reverse=True):
             #print(total_pred)
             df.sort_index(level="cath", inplace=True)
             title = get_family_desc(classname)
@@ -868,7 +919,7 @@ def image_classifier(mode="double_connected", train = True, decode=False, view=F
         from torchview import draw_graph
         model_path = f"{M(1).__class__.__name__}_{mode}_{dataset_name}.model.pth"
         model_data = json.load(open(model_path.split(".")[0] + ".model.data.json"))
-        model_graph = draw_graph(M(n_features=model_data["n_features"], fig_size=128, n_chanels=1), input_size=(1, 1, 128, 128),
+        model_graph = draw_graph(M(n_features=model_data["n_features"], fig_size=28, n_chanels=1), input_size=(1, 10),
                                  expand_nested=True,
                                  graph_name="graph_1",
                                  save_graph=True,
@@ -964,7 +1015,7 @@ force = "-f" in sys.argv
 if "-l" in sys.argv or "-e" in sys.argv:
     get_PCA(force=force, labs="-l"in sys.argv, images="-e" in sys.argv)
 else:
-    image_classifier(mode="double_connected", train="-t" in sys.argv, decode="decode" in sys.argv, temp="temp" in sys.argv, view="view" in sys.argv)
+    image_classifier(mode="connected", train="-t" in sys.argv, decode="decode" in sys.argv, temp="temp" in sys.argv, view="view" in sys.argv)
 
 
 

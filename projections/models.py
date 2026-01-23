@@ -80,14 +80,14 @@ def DiceLoss(pred, target, smooth=1, show=False):
 
 
 class SmallNetv3(nn.Module):
-    def __init__(self, n_features=None, n_chanels=1, fig_size=128):
+    def __init__(self, n_features=10, n_chanels=1, fig_size=28):
         super().__init__()
         self.n_features = n_features
         self.n_chanels = n_chanels
         self.fig_size = fig_size
         print("FIG_SIZE", self.fig_size)
         print("N_CHANNELS =", n_chanels)
-        assert fig_size % 32 == 0
+        #assert fig_size % 32 == 0
         self.kernel1 = 5
         self.stride1 = 2
         self.kernel2 = 4
@@ -98,32 +98,38 @@ class SmallNetv3(nn.Module):
         assert self.red_fig_size % 2 == 0
 
         f_layers = [
-            nn.Conv2d(n_chanels, n_chanels*2, self.kernel1, stride=self.stride1,padding=2),
-            #nn.ReLU(),
-            #nn.Conv2d(n_chanels * 2, n_chanels * 4, self.kernel2, stride=self.stride2),
-            #nn.ReLU(),
+            nn.Conv2d(n_chanels, 32, 3, stride=2, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(32, 64, 3, stride=2, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(64, 128, 3, stride=2, padding=1),
+            nn.ReLU(),
             nn.Flatten(),
-            nn.Linear(int(self.fig_size / 2) * n_chanels*2 *64, fig_size*4),
+            nn.Linear(128 * 16 * 16, n_features),
             #nn.ReLU(),
-            nn.Linear(fig_size * 4, fig_size*2),
+            #nn.Linear(fig_size * 4, fig_size*2),
             #nn.ReLU(),
-            nn.Linear(fig_size*2, n_features),
-            nn.Softmax(dim=1)
+            #nn.Linear(fig_size*2, n_features),
+            #nn.Softmax(dim=1)
         ]
 
         print("CONV2 flat:", n_chanels * 2 * int(self.red_fig_size / 2) * self.red_fig_size)
 
         r_layers = [
-            nn.Linear(n_features, fig_size*2),
+            nn.Linear(n_features, 128 * 16 *16),
+            nn.ReLU(),
+            #nn.Linear(fig_size*2, fig_size * 4),
             #nn.ReLU(),
-            nn.Linear(fig_size*2, fig_size * 4),
+            #nn.Linear(fig_size * 4, int(self.fig_size / 2) * n_chanels*2 *int(self.fig_size/2)),
+            nn.Unflatten(-1, (128, 16, 16)),
             #nn.ReLU(),
-            nn.Linear(fig_size * 4, int(self.fig_size / 2) * n_chanels*2 *64),
-            nn.Unflatten(-1, (self.n_chanels * 2, int(self.fig_size/2), int(self.fig_size/2))),
+            nn.ConvTranspose2d(128, 64, 3, 2, padding=1, output_padding=1),
+            nn.ReLU(),
+            nn.ConvTranspose2d(64, 32, 3, 2, padding=1, output_padding=1),
+            nn.ReLU(),
+            nn.ConvTranspose2d(32, 1, 3, 2, padding=1, output_padding=1),
             #nn.ReLU(),
-            #nn.ConvTranspose2d(n_chanels * 4, n_chanels * 2, self.kernel2, stride=self.stride2),
-            #nn.ReLU(),
-            nn.ConvTranspose2d(n_chanels * 2, n_chanels, self.kernel1, stride=self.stride1, padding=2, output_padding=1),
+            #nn.ConvTranspose2d(n_chanels * 2, n_chanels, self.kernel1, stride=self.stride1, padding=2, output_padding=1),
             #nn.Softmax(dim=2)
 
         ]
