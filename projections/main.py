@@ -561,6 +561,8 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
             trainset = ImageDataset(train_list, img_folder=img_folder, label_folder="labels")
             testset = ImageDataset(test_list, img_folder=img_folder, label_folder="labels")
 
+
+
         print(f"ACTUAL VALID DATA [(img+label)/chain]: \033[0;36m{len(trainset)+len(testset)}\033[0m test/train: {len(testset)}/{len(trainset)} ({len(testset)/len(trainset):.2f})")
 
         # from models import test_layer
@@ -581,8 +583,11 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
         collate_fn = None
         if "QMNIST" in sys.argv:
 
-            labs = sorted(list(set([x[1] for x in trainset])))
-            label_to_index = index_to_label = {l:l for l in labs}
+            labs = sorted(list(set([str(x[1]) for x in trainset])))
+            label_to_index = index_to_label = {str(l):l for l in labs}
+            n_labs = {str(k):0 for k in labs}
+            for l in labs:
+                n_labs[str(l)] += 1
 
             print(labs)
 
@@ -818,7 +823,6 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
                             continue
             print()
             print('Finished Training ({} epochs)'.format(epochs))
-            print(f"\033]0;Training (postprocess)\a")
 
             PATH = f'./{net.__class__.__name__}_{mode}_{dataset_name}.model.pth'
 
@@ -826,7 +830,8 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
         except KeyboardInterrupt:
             PATH = f'./model.temp.pth'
 
-
+        print(f"\033]0;Training (postprocess)\a")
+        print("POSTRPROCESSING...")
 
         #dataiter = iter(testloader)
         #images, labels = next(dataiter)
@@ -853,10 +858,8 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
         # since we're not training, we don't need to calculate the gradients for our outputs
         with torch.no_grad():
             for data in testloader:
-                if "QMNIST" in sys.argv:
-                    images, labels = [x[0] for x in d][0], [x[1] for x in d]
-                else:
-                    images, labels = data
+
+                images, labels = data
                 #print(imgs, labels)
                 if len(images.shape) == 3:
                     images = images.reshape([1, *imgs.shape])
@@ -872,13 +875,15 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
                 #correct += (predicted == labels).sum().item()
                 for i, l, p in zip(images, labels, predicted):
                     #print(i.shape, l, p)
-                    pres.append(index_to_label[int(l)])
-                    truths.append(index_to_label[int(p)])
+                    p = str(int(p))
+                    l = str(int(l))
+                    pres.append(index_to_label[p])
+                    truths.append(index_to_label[p])
 
                     if l == p:
-                        correct_pred[index_to_label[int(l)]] += 1
+                        correct_pred[index_to_label[l]] += 1
                         correct += 1
-                    total_pred[index_to_label[int(l)]] += 1
+                    total_pred[index_to_label[l]] += 1
                     total += 1
 
         print(f'Accuracy of {len(testset)}/{len(trainset)} test images: {100 * correct /total:.1f} %')
@@ -917,13 +922,13 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
         #print("LEXSORTED:", df.index.is_monotonic_increasing, )
 
 
-        for classname, correct_count in sorted([(k,v) for k, v in correct_pred.items() if k in labs], key=lambda x: labs[x[0]], reverse=True):
+        for classname, correct_count in sorted([(str(k),v) for k, v in correct_pred.items() if k in labs], key=lambda x: n_labs[x[0]], reverse=True):
             #print(total_pred)
             df.sort_index(level="cath", inplace=True)
             title = get_family_desc(classname)
             warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
 
-            df.loc[(classname, dataset_name, mode), "cath"] = classname
+            df.loc[(classname, dataset_name, mode), "label"] = classname
             df.loc[(classname, dataset_name, mode), "title"] = title
             df.loc[(classname, dataset_name, mode), "dataset"] = dataset_name
             df.loc[(classname, dataset_name, mode), "mode"] = mode
@@ -932,11 +937,11 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
 
             if total_pred[classname] == 0:
                 accuracy = None
-                print(f'Accuracy for class ({label_to_index[classname]:3d}) -> {classname:12s}: \t{accuracy}\t(not in test set)\tin data: {n_labs[classname]:3d}\ttitle: {title}')
+                print(f'Accuracy for class ({label_to_index[classname]:3s}) -> {str(classname):12s}: \t{accuracy}\t(not in test set)\tin data: {n_labs[classname]:3d}\ttitle: {title}')
 
             else:
                 accuracy = 100 * float(correct_count) / total_pred[classname]
-                print(f'Accuracy for class ({label_to_index[classname]:3d}) -> {classname:12s}: \t{accuracy:4.2f}%\tcorrect:  {correct_count:3d}/{total_pred[classname]:3d}\tin data: {n_labs[classname]:3d}\ttitle: {title}')
+                print(f'Accuracy for class ({label_to_index[classname]:3s}) -> {str(classname):12s}: \t{accuracy:4.2f}%\tcorrect:  {correct_count:3d}/{total_pred[classname]:3d}\tin data: {n_labs[classname]:3d}\ttitle: {title}')
 
                 df.loc[(classname, dataset_name, mode), "correct"] = correct_count
                 df.loc[(classname, dataset_name, mode), "total"] = total_pred[classname]
