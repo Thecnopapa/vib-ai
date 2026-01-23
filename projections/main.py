@@ -13,7 +13,7 @@ from mpl_toolkits.axes_grid1 import ImageGrid
 
 from parallel import *
 sys.path.append('..')
-
+np.random.seed(6)
 
 
 def get_family_desc(fam, cath_folder="cath"):
@@ -262,6 +262,10 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
         from models import SmallNetv3 as SmallNet
         M = SmallNet
 
+    elif "QMNIST" in sys.argv:
+        from models import SmallNetQMINST as SmallNet
+        M = SmallNet
+
     if "mega" in sys.argv:
         dataset_name = "mega"
         file_folder = bi.biopython.downloadPDB("../internship/data", "mega-batch",
@@ -272,6 +276,9 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
         file_folder = bi.biopython.downloadPDB("../internship/data", "cath-nonredundant-S20",
                                                file_path="../internship/data/cath-dataset-nonredundant-S20.list", file_format="cif",
                                                overwrite=False)
+    elif "QMNIST" in sys.argv:
+        dataset_name = "QMNIST"
+        file_folder = None
     else:
         dataset_name = "rcps"
         file_folder = bi.biopython.downloadPDB("../internship/data", "receptors",
@@ -292,62 +299,78 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
         labs = []
 
         print("DATASET:", file_folder)
-        print(f"Filtering {len(os.listdir(file_folder))} PDBs...")
-        valid = 0
-        no_label = 0
-        no_image = 0
-        for n, file in enumerate(os.listdir(file_folder)):
-            code = file.split(".")[0]
-            l_path = os.path.join("labels", f"{code}.labels.json")
-            if os.path.exists(l_path):
-                lab_data = json.load(open(l_path))
-                labs.extend([v["label"] for v in lab_data.values()] )
-                structure_list.append(code)
-            else:
-                print(n, file, "label not found", end="\r")
-                no_label += 1
-                continue
-            if False:
-                i_path = os.path.join(f"imgs/{mode}", f"{code}*.png")
-                if glob.glob(i_path):
-                    pass
+        if file_folder is not None:
+            print(f"Filtering {len(os.listdir(file_folder))} PDBs...")
+            valid = 0
+            no_label = 0
+            no_image = 0
+            for n, file in enumerate(os.listdir(file_folder)):
+                code = file.split(".")[0]
+                l_path = os.path.join("labels", f"{code}.labels.json")
+                if os.path.exists(l_path):
+                    lab_data = json.load(open(l_path))
+                    labs.extend([v["label"] for v in lab_data.values()] )
+                    structure_list.append(code)
                 else:
-                    print(n, file, "images not found", end="\r")
-                    no_image += 1
+                    print(n, file, "label not found", end="\r")
+                    no_label += 1
                     continue
-            structure_list.append(code)
-            valid +=1
-        print()
+                if False:
+                    i_path = os.path.join(f"imgs/{mode}", f"{code}*.png")
+                    if glob.glob(i_path):
+                        pass
+                    else:
+                        print(n, file, "images not found", end="\r")
+                        no_image += 1
+                        continue
+                structure_list.append(code)
+                valid +=1
+            print()
 
-        print("NO LABEL:", no_label)
-        #print("NO IMAGE:", no_image)
-        print("INVALID:", no_image+no_label)
-        print("VALID:", valid)
+            print("NO LABEL:", no_label)
+            #print("NO IMAGE:", no_image)
+            print("INVALID:", no_image+no_label)
+            print("VALID:", valid)
 
 
 
 
-        n_labs = {k:v for k,v in sorted([(l, labs.count(l)) for l in set(labs)], key= lambda x: x[1], reverse=True)}
-        n_labs["other"] = 0
+            n_labs = {k:v for k,v in sorted([(l, labs.count(l)) for l in set(labs)], key= lambda x: x[1], reverse=True)}
+            n_labs["other"] = 0
 
-        index_to_label = {0: "other"}
-        label_to_index = {"other": 0}
-        for k, v in n_labs.items():
-            if v < 10:
-                label_to_index[str(k)] = 0
-                n_labs["other"] +=1
-            else:
-                n = len(index_to_label)
-                label_to_index[str(k)] = int(n)
-                index_to_label[int(n)] = str(k)
+            index_to_label = {0: "other"}
+            label_to_index = {"other": 0}
+            for k, v in n_labs.items():
+                if v < 10:
+                    label_to_index[str(k)] = 0
+                    n_labs["other"] +=1
+                else:
+                    n = len(index_to_label)
+                    label_to_index[str(k)] = int(n)
+                    index_to_label[int(n)] = str(k)
 
-        labs = index_to_label.values()
-        all_labs = label_to_index.keys()
+            labs = index_to_label.values()
+            all_labs = label_to_index.keys()
+
+            print()
+            print("N chains:", len(structure_list))
+            print("N labs (n>10):", len(labs))
+            print("N labs (all):", len(all_labs))
+            # print(json.dumps({k:v for k,v in n_labs.items() if v>=10}, indent=4))
+            img_folder = f"imgs/{mode}"
+
         import torchvision
-        QMNIST = torchvision.datasets.QMNIST("datasets", download = True)
-        print(QMNIST)
-        print(QMNIST[1])
-        
+
+
+        class QMNISTDataset(torchvision.datasets.QMNIST):
+            def __getitem__(self, i):
+
+                item, lab = super().__getitem__(i)
+                item = torchvision.transforms.functional.pil_to_tensor(item)
+                item = item / 256
+
+                return item, lab
+
 
 
         class ImageDataset(Dataset):
@@ -516,18 +539,14 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
 
 
         batch_size = 1
-        print()
-        print("N chains:", len(structure_list))
-        print("N labs (n>10):", len(labs))
-        print("N labs (all):", len(all_labs))
-        #print(json.dumps({k:v for k,v in n_labs.items() if v>=10}, indent=4))
-        np.random.seed(6)
 
 
-        img_folder = f"imgs/{mode}"
+
+
+
         if "QMNIST" in sys.argv:
-            trainset = torchvision.datasets.QMNIST("datasets", download=True, what="train")
-            testset = torchvision.datasets.QMNIST("datasets", download=True, what="test10k")          
+            trainset = QMNISTDataset("datasets", download=True, what="train")
+            testset =QMNISTDataset("datasets", download=True, what="test10k")
             trainset.channels = 1
             trainset.image_dims = 28
         else:
@@ -544,17 +563,31 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
 
         print(f"ACTUAL VALID DATA [(img+label)/chain]: \033[0;36m{len(trainset)+len(testset)}\033[0m test/train: {len(testset)}/{len(trainset)} ({len(testset)/len(trainset):.2f})")
 
+        # from models import test_layer
+        # import matplotlib.pyplot as plt
+        # plt, ax = plt.subplots(1,2)
+        # i = trainset[0][0]
+        # print(i)
+        # ax[0].imshow(i[0])
+        # t= test_layer(i).detach()
+        # ax[1].imshow(t[0][0])
+        #
+        # plt.show()
+        # input("Press Enter to continue...")
+        # exit()
+
 
         from parallel import cpu_count
         collate_fn = None
         if "QMNIST" in sys.argv:
-            def collate_fn(x):
-                
-                return [(torchvision.transforms.functional.pil_to_tensor(y[0]), y[1]) for y in x]
-            labs = list(set([x[1] for x in trainset]))
 
-        trainloader = torch.utils.data.DataLoader(trainset, batch_size=1, shuffle=True, num_workers=0, collate_fn=collate_fn)
-        testloader = torch.utils.data.DataLoader(testset, batch_size=1, shuffle=True, num_workers=0, collate_fn=collate_fn)
+            labs = sorted(list(set([x[1] for x in trainset])))
+            label_to_index = index_to_label = {l:l for l in labs}
+
+            print(labs)
+
+        trainloader = torch.utils.data.DataLoader(trainset, batch_size=1, shuffle=True, num_workers=0)
+        testloader = torch.utils.data.DataLoader(testset, batch_size=1, shuffle=True, num_workers=0)
 
 
 
@@ -601,11 +634,11 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
         from torch.utils.tensorboard import SummaryWriter
         import datetime
         writer = SummaryWriter(log_dir=f"runs/{dataset_name}/{optimizer.__class__.__name__}-{i_optimizer.__class__.__name__}-{datetime.datetime.now()}")
-        
+
         n_samples = 20
 
         if "QMNIST" in sys.argv:
-            images = np.array([torchvision.transforms.functional.pil_to_tensor(trainset[x][0]).numpy() for x in range(n_samples)])
+            images = np.array([trainset[x][0].numpy() for x in range(n_samples)])
         else:
             images = np.array([[trainset.__getitem__(x, as_image=False)[0].numpy()] for x in range(n_samples)])
         #print(images)
@@ -631,20 +664,19 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
                 running_i_loss = 0.0
                 if os.environ.get("SLURM_CPUS_PER_TASK", None) is None:
                     print(f'[{epoch + 1}, {0:5d}] loss: {running_loss / 10:.3f}', end="\r")
-            
+
                 for i, d in enumerate(trainloader):
                     #print(i, d)
-                    if "QMNIST" in sys.argv:
-                        # get the inputs; data is a list of [inputs, labels]
-                        imgs, labels = [x[0] for x in d][0], [x[1] for x in d]
-                    else:
-                        imgs, labels = d
+                    # if "QMNIST" in sys.argv:
+                    #     # get the inputs; data is a list of [inputs, labels]
+                    #     imgs, labels = [x[0] for x in d][0], [x[1] for x in d]
+                    # else:
+                    imgs, labels = d
                     #print(imgs, labels)
                     if len(imgs.shape) == 3:
                         imgs = imgs.reshape([1, *imgs.shape])
                     #print(imgs)
-                    if "QMNIST" in sys.argv:
-                        imgs = imgs / 256
+
                     #print("IMG:")
                     #print(imgs)
                     #print(imgs.shape)
@@ -691,7 +723,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
 
                     #print(img)
                     #print(i_outputs[0])
-                    i_loss = i_criterion(i_outputs[0], img[0], show=False)
+                    i_loss = i_criterion(i_outputs, img, show=False)
                     #print("I-LOSS:", i_loss.item())
                     #print(i_loss.item())
                     i_loss.backward()
@@ -819,7 +851,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
             for data in testloader:
                 if "QMNIST" in sys.argv:
                     images, labels = [x[0] for x in d][0], [x[1] for x in d]
-                else: 
+                else:
                     images, labels = data
                 #print(imgs, labels)
                 if len(images.shape) == 3:
@@ -827,7 +859,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
                 #print(imgs)
                 if "QMNIST" in sys.argv:
                     images = images / 256
-                
+
                 # calculate outputs by running images through the network
                 outputs = net(images[0])
                 # the class with the highest energy is what we choose as prediction
@@ -880,7 +912,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
         #print(df)
         #print("LEXSORTED:", df.index.is_monotonic_increasing, )
 
-        
+
         for classname, correct_count in sorted([(k,v) for k, v in correct_pred.items() if k in labs], key=lambda x: labs[x[0]], reverse=True):
             #print(total_pred)
             df.sort_index(level="cath", inplace=True)

@@ -1,4 +1,4 @@
-
+import sys, os, json
 
 
 import torch
@@ -9,6 +9,13 @@ import matplotlib.pyplot as plt
 
 
 
+
+def SimpleLoss(pred, target, smoot=None, show=False):
+
+    diff = pred - target
+
+    loss = torch.mean(diff)
+    return loss
 
 
 
@@ -77,6 +84,60 @@ def DiceLoss(pred, target, smooth=1, show=False):
 
 
 
+
+def test_layer(x):
+    shape = x.shape
+
+    i = nn.Linear(28 * 28 * 1, 10)
+    o = nn.Linear(10, 28 * 28 * 1)
+
+    print(x.shape)
+
+    x = nn.Flatten()(x)
+    print(x.shape)
+    x = i(x)
+    x = o(x)
+    x = nn.Unflatten(-1, shape)(x)
+    return x
+
+
+
+
+class SmallNetQMINST(nn.Module):
+    def __init__(self, n_features=10, n_chanels=1, fig_size=28):
+        super().__init__()
+        self.n_features = n_features
+        self.n_chanels = n_chanels
+        self.fig_size = fig_size
+
+        f_layers = [
+            nn.ReLU(),
+            nn.Flatten(),
+            nn.Linear(28 * 28 * self.n_chanels, n_features),
+            nn.Softmax(dim=-1)
+        ]
+
+
+
+        r_layers = [
+            nn.Linear(n_features, 28 * 28 * self.n_chanels),
+            nn.Unflatten(-1, (self.n_chanels, 28, 28)),
+
+            nn.ReLU(),
+
+        ]
+        self.f_net = nn.Sequential(*f_layers)
+        self.r_net = nn.Sequential(*r_layers)
+
+    def forward(self, x):
+        if len(x.shape) == 3:
+            x = x.reshape([1, *x.shape])
+        x = self.f_net(x)
+        return x
+
+    def backward(self, x):
+        x = self.r_net(x)
+        return x
 
 
 class SmallNetv3(nn.Module):
