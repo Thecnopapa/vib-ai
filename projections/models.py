@@ -12,9 +12,51 @@ import matplotlib.pyplot as plt
 
 def SimpleLoss(pred, target, smoot=None, show=False):
 
-    diff = pred - target
 
-    loss = torch.mean(diff)
+
+
+    #print("PRED:", pred)
+    #print("TARGET", target)
+
+    # clean = pred * target
+    # print("CLEAN:", clean)
+    # clean_diff = clean - target
+    # print(clean_diff)
+    # clean_loss = torch.sub(torch.max(clean_diff), torch.max(target))
+    # print(clean_loss)
+
+    diff = torch.subtract(pred, target)
+    #print("DIFF", diff)
+    square = torch.pow(diff, 2)
+    #print("SQUARE:", square)
+    mean = torch.mean(square)
+    #print("MEAN:", mean)
+
+
+    loss = torch.sub(torch.Tensor([1]), torch.square(mean)).reshape(1)
+    #print(loss, loss.shape)
+
+
+    return loss
+
+
+def SimpleImageLoss(pred, target, smoot=None, show=False):
+
+    if show:
+        fig, ax = plt.subplots(1, 3, figsize=(15, 5))
+        ax[1].imshow(pred.detach().numpy()[0][0])
+        ax[1].set_title("pred")
+        ax[0].imshow(target.detach().numpy()[0][0])
+        ax[0].set_title("target")
+
+    diff = pred - target
+    if show:
+        ax[2].imshow(diff.detach().numpy()[0][0])
+        ax[2].set_title("diff")
+        plt.show()
+        plt.close()
+
+    loss = 1 + torch.mean(diff)
     return loss
 
 
@@ -78,6 +120,7 @@ def DiceLoss(pred, target, smooth=0, show=False):
         ax[5].imshow(l.detach().numpy())
         ax[5].set_title(f"loss ({loss:.3f})")
         plt.show()
+        plt.close()
 
 
     return loss
@@ -112,7 +155,7 @@ class SmallNetQMINST(nn.Module):
         self.inner_figs = [int(self.fig_size/2)]
         self.channels = [self.n_channels, 32]
 
-        f_layers = [
+        self.f_layers = [
 
             nn.Conv2d(self.channels[0], self.channels[1], 3, stride=2, padding=1), # 1, 32, 14, 14
             nn.ReLU(),
@@ -123,15 +166,15 @@ class SmallNetQMINST(nn.Module):
 
 
 
-        r_layers = [
+        self.r_layers = [
             nn.Linear(n_features, self.inner_figs[0] * self.inner_figs[0] * self.channels[1]),
             nn.Unflatten(-1, (self.channels[1], self.inner_figs[0], self.inner_figs[0])),
             nn.ReLU(),
             nn.ConvTranspose2d(self.channels[1], self.channels[0], 3, stride=2, padding=1, output_padding=1),
             nn.Softmax(dim=-1)
         ]
-        self.f_net = nn.Sequential(*f_layers)
-        self.r_net = nn.Sequential(*r_layers)
+        self.f_net = nn.Sequential(*self.f_layers)
+        self.r_net = nn.Sequential(*self.r_layers)
 
     def forward(self, x):
         if len(x.shape) == 3:

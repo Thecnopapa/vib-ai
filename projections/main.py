@@ -584,12 +584,17 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
         if "QMNIST" in sys.argv:
 
             labs = sorted(list(set([str(x[1]) for x in trainset])))
-            label_to_index = index_to_label = {str(l):l for l in labs}
+            label_to_index = {str(l):int(l) for l in labs}
+            index_to_label = {int(l):str(l) for l in labs}
+            print(label_to_index)
+            print(index_to_label)
             n_labs = {str(k):0 for k in labs}
-            for l in labs:
-                n_labs[str(l)] += 1
-
             print(labs)
+            for _, l in trainset:
+                n_labs[str(l)] += 1
+            print(labs)
+            print(n_labs)
+
 
         trainloader = torch.utils.data.DataLoader(trainset, batch_size=1, shuffle=True, num_workers=0)
         testloader = torch.utils.data.DataLoader(testset, batch_size=1, shuffle=True, num_workers=0)
@@ -617,21 +622,19 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
         import torch.optim as optim
         import torch
 
-        #[print(p.shape, type(p)) for p in net.f_net.parameters()]
-        probs = []
-        criterion = nn.CrossEntropyLoss()
+        from models import DiceLoss, SimpleLoss, SimpleImageLoss
+
+
+        #criterion = SimpleLoss
+        criterion = nn.MSELoss()
 
         optimizer = optim.Adam(net.f_net.parameters(), lr=0.001)
-        #optimizer = optim.Adam(net.f_net.parameters(), lr=0.002)
 
-
-
-
-        #i_criterion = nn.CrossEntropyLoss()
-        from models import DiceLoss, SimpleLoss
         i_criterion = DiceLoss
-        #i_optimizer = optim.SGD(net.r_net.parameters(), lr=0.001)
         i_optimizer = optim.Adam(net.r_net.parameters(), lr=0.001)
+
+
+
         epochs = 100
         splitsize = len(trainloader) // 10
         print(f"SPLITSIZE: {splitsize}")
@@ -668,9 +671,10 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
                 running_loss = 0.0
                 running_i_loss = 0.0
                 if os.environ.get("SLURM_CPUS_PER_TASK", None) is None:
-                    print(f'[{epoch + 1}, {0:5d}] loss: {running_loss / 10:.3f}', end="\r")
+                    print(f'[{epoch + 1:2d}, {0:5d}] loss: {0.:5.3f} i-loss: {0.:5.3f}',end="\r")
 
                 for i, d in enumerate(trainloader):
+                    step = epoch*10+i//splitsize
                     #print(i, d)
                     # if "QMNIST" in sys.argv:
                     #     # get the inputs; data is a list of [inputs, labels]
@@ -690,23 +694,17 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
                     optimizer.zero_grad()
 
                     outputs = net(imgs)
-                    pred = torch.max(outputs, 1).indices[0]
+                    #pred = torch.max(outputs, 1).indices[0]
                     #print(pred)
                     truth = [0.]*len(labs)
                     #print(labels)
                     truth[labels[0]] = 1.
                     truth = torch.Tensor(truth)
                     truth = truth.reshape(1,*truth.shape)
-                    #print()
-                    #print("TRUTH:", truth)
-                    #print(outputs, m, outputs[0][m], truth[m])
 
-                    #print(outputs.shape, truth.shape)
-                    #print(outputs, truth.numpy())
-                    #print(outputs)
-                    #print(truth)
                     loss = criterion(outputs, truth)
-                    loss.backward(retain_graph=True)
+                    loss.backward(retain_graph=False)
+                    optimizer.step()
 
                     #print("LOSS:", loss.item())
                     #print(loss.item())
@@ -735,8 +733,9 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
                     i_loss = i_criterion(i_outputs, img, show=False)
                     #print("I-LOSS:", i_loss.item())
                     #print(i_loss.item())
+                    #print(i_loss)
                     i_loss.backward()
-                    optimizer.step()
+
                     i_optimizer.step()
 
                     # print statistics
@@ -752,75 +751,55 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
 
                     if i % splitsize == 0 and i != 0:  # print every 1000 mini-batches
                         print(f'[{epoch + 1:2d}, {i:5d}] loss: {running_loss / splitsize:5.3f} i-loss: {running_i_loss / splitsize:5.3f}', end = "\n")
-                        writer.add_scalar("loss/encode", running_loss / splitsize, epoch*10+i//splitsize)
-                        writer.add_scalar("loss/decode", running_i_loss / splitsize, epoch*10+i//splitsize)
+                        writer.add_scalar(f"loss/encode ({criterion.__class__.__name__})", running_loss / splitsize, step)
+                        writer.add_scalar(f"loss/decode ({i_criterion.__class__.__name__})", running_i_loss / splitsize, step)
                         running_loss = 0.0
                         running_i_loss = 0.0
 
-                if False:
-                #with torch.no_grad():
-                    for i_name in ["1M2Z_A", "1AQK_L", "1BWW_A", "1GLU_A"]:
-                        try:
-                            i_path = f"imgs/{mode}/{i_name}.png"
-                            l_path = f"labels/{i_name[:4]}.labels.json"
+                        for n, layer in enumerate(net.f_layers):
+                            print(layer.__dict__)
+                            if hasattr(layer, "weight"):
+                                writer.add_histogram(f"decoding/{n}/weight/{layer.__class__.__name__}", layer.weight,
+                                                     epoch * 10 + i // splitsize)
 
-                            image = Image.open(i_path)
-                            image = transform(image)
-                            image = torch.Tensor(np.array([image[-1]]))
-                            #print(image)
+                            if hasattr(layer, "bias"):
+                                writer.add_histogram(f"decoding/{n}/bias/{layer.__class__.__name__}", layer.bias,
+                                                     epoch * 10 + i // splitsize)
 
-                            #image = torch.sigmoid(image)
-                            bits = net(image)
-                            #print("BITS:", bits[0])
-                            dec = net.backward(bits[0])
-                            #image = nn.Softmax(dim=1)(image)#*256
-                            #dec = nn.Softmax(dim=1)(dec)#*256
-                            #print(dec.shape)
-                            #print(dec)
-                            #print(image.shape)
-                            #print(image)
-                            #dec = transforms.functional.to_pil_image(dec, mode=None)
-                            #overlay = torch.cat((dec, image))
-                            #print(overlay)
-                            #print(overlay.shape)
-                            #writer.add_image(f"test/{i_name} (overlay)", image, epoch + 1)
-                            true_lab = label_to_index[json.load(open(l_path, "r"))[i_name[-1]]["label"]]
-                            true_bits = [0] * len(labs)
-                            # print(bits)
-                            true_bits[true_lab] = 1
-                            # print(bits)
-                            true_bits = torch.Tensor(true_bits)
-                            # print("BITS LAB:", bits)
-                            true_img = net.backward(true_bits)
-                            writer.add_image(f"test/{i_name} (class)", true_img, epoch + 1)
-                            writer.add_image(f"test/{i_name} (in)", image, epoch+1)
-                            writer.add_image(f"test/{i_name} (out)", dec, epoch+1)
-                        except Exception as e:
-                            print(e)
-                            #exit()
-                            continue
-                with torch.no_grad():
-                    print(labs)
-                    for l in labs:
-                        try:
-                            bits = [0]*len(labs)
-                            print(bits)
-                            if "QMNIST" in sys.argv:
-                                n = int(l)
-                            else:
-                                n = label_to_index[l]
-                            bits[n] = 1
-                            print(bits)
-                            bits = torch.Tensor(bits)
-                            print("BITS LAB:", bits)
-                            dec = net.backward(bits)
-                            print(dec)
-                            print(dec.shape)
-                            writer.add_image(f"classes/{l}", dec, epoch+1)
-                        except Exception as e:
-                            print(e)
-                            raise e
-                            continue
+                        for n, layer in enumerate(net.r_layers[::-1]):
+                            if hasattr(layer, "weight"):
+                                writer.add_histogram(f"decoding/{n}/weight/{layer.__class__.__name__}", layer.weight,
+                                                     epoch * 10 + i // splitsize)
+
+                            if hasattr(layer, "bias"):
+                                writer.add_histogram(f"decoding/{n}/bias/{layer.__class__.__name__}", layer.bias,
+                                                     epoch * 10 + i // splitsize)
+
+                        with open("./model.temp.data.json", "w") as f:
+                            json.dump(data, f, indent=4)
+
+                        with torch.no_grad():
+                            #print(labs)
+                            for l in labs:
+                                try:
+                                    bits = [0]*len(labs)
+                                    #print(bits)
+                                    if "QMNIST" in sys.argv:
+                                        n = int(l)
+                                    else:
+                                        n = label_to_index[l]
+                                    bits[n] = 1
+                                    #print(bits)
+                                    bits = torch.Tensor(bits)
+                                    #print("BITS LAB:", bits)
+                                    dec = net.backward(bits)
+                                    #print(dec)
+                                    #print(dec.shape)
+                                    writer.add_image(f"classes/{l}", dec, step)
+                                except Exception as e:
+                                    print(e)
+                                    raise e
+                                    continue
             print()
             print('Finished Training ({} epochs)'.format(epochs))
 
@@ -851,8 +830,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
         total = 0
         pres = []
         truths = []
-        if "QMNIST" in sys.argv:
-            index_to_label = label_to_index = {k:k for k in labs}
+
         correct_pred = {classname: 0 for classname in sorted(labs)}
         total_pred = {classname: 0 for classname in sorted(labs)}
         # since we're not training, we don't need to calculate the gradients for our outputs
@@ -860,31 +838,34 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
             for data in testloader:
 
                 images, labels = data
-                #print(imgs, labels)
-                if len(images.shape) == 3:
-                    images = images.reshape([1, *imgs.shape])
-                #print(imgs)
-                if "QMNIST" in sys.argv:
-                    images = images / 256
+                predicts = net(img)
+                #print(imgs.shape, labels)
+                for img, label, pred in zip(images, labels, predicts):
+                    #print(img.shape, label, pred)
 
-                # calculate outputs by running images through the network
-                outputs = net(images[0])
-                # the class with the highest energy is what we choose as prediction
-                _, predicted = torch.max(outputs, 1)
-                #total += labels.size(0)
-                #correct += (predicted == labels).sum().item()
-                for i, l, p in zip(images, labels, predicted):
-                    #print(i.shape, l, p)
-                    p = str(int(p))
-                    l = str(int(l))
-                    pres.append(index_to_label[p])
-                    truths.append(index_to_label[p])
 
-                    if l == p:
-                        correct_pred[index_to_label[l]] += 1
-                        correct += 1
-                    total_pred[index_to_label[l]] += 1
+                    pred, pred_index = torch.max(pred, 0)
+                    pred_index = int(pred_index)
+                    pred_label = index_to_label[pred_index]
+                    label = index_to_label[int(label)]
+                    label_index = label_to_index[label]
+                    #print("label:", label, "index:", label_index)
+                    #print(f"pred: {float(pred):.3f} index: {pred_index} label: {pred_label}")
                     total += 1
+                    total_pred[label] += 1
+                    pres.append(pred_label)
+                    truths.append(label)
+                    #print(pres[-1], truths[-1])
+                    #print("correct: ", label_index == pred_index)
+
+
+                    if label_index == pred_index:
+                        correct_pred[label] += 1
+                        correct += 1
+
+
+
+
 
         print(f'Accuracy of {len(testset)}/{len(trainset)} test images: {100 * correct /total:.1f} %')
 
@@ -911,20 +892,20 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
                 if col not in df.columns:
                     df.insert(len(df.columns), col, [None]*len(df))
         else:
-            columns = ["title", "cath",  "dataset", "mode"] + columns
+            columns = ["title", "label",  "dataset", "mode"] + columns
             df = pd.DataFrame(columns=columns)
 
 
-        df.set_index(["cath", "dataset", "mode"], inplace=True, drop=False)
-        df.sort_index(level="cath", inplace=True)
+        df.set_index(["label", "dataset", "mode"], inplace=True, drop=False)
+        df.sort_index(level="label", inplace=True)
 
         #print(df)
         #print("LEXSORTED:", df.index.is_monotonic_increasing, )
 
 
-        for classname, correct_count in sorted([(str(k),v) for k, v in correct_pred.items() if k in labs], key=lambda x: n_labs[x[0]], reverse=True):
+        for classname, correct_count in sorted([(k,v) for k, v in correct_pred.items() if k in labs], key=lambda x: n_labs[x[0]], reverse=True):
             #print(total_pred)
-            df.sort_index(level="cath", inplace=True)
+            df.sort_index(level="label", inplace=True)
             title = get_family_desc(classname)
             warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
 
@@ -937,22 +918,22 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
 
             if total_pred[classname] == 0:
                 accuracy = None
-                print(f'Accuracy for class ({label_to_index[classname]:3s}) -> {str(classname):12s}: \t{accuracy}\t(not in test set)\tin data: {n_labs[classname]:3d}\ttitle: {title}')
+                print(f'Accuracy for class ({label_to_index[classname]:3d}) -> {str(classname):12s}: \t{accuracy}\t(not in test set)\tin data: {n_labs[classname]:3d}\ttitle: {title}')
 
             else:
                 accuracy = 100 * float(correct_count) / total_pred[classname]
-                print(f'Accuracy for class ({label_to_index[classname]:3s}) -> {str(classname):12s}: \t{accuracy:4.2f}%\tcorrect:  {correct_count:3d}/{total_pred[classname]:3d}\tin data: {n_labs[classname]:3d}\ttitle: {title}')
+                print(f'Accuracy for class ({label_to_index[classname]:3d}) -> {str(classname):12s}: \t{accuracy:4.2f}%\tcorrect:  {correct_count:3d}/{total_pred[classname]:3d}\tin data: {n_labs[classname]:3d}\ttitle: {title}')
 
                 df.loc[(classname, dataset_name, mode), "correct"] = correct_count
                 df.loc[(classname, dataset_name, mode), "total"] = total_pred[classname]
 
             df.loc[(classname, dataset_name, mode), "accuracy"] = accuracy
             warnings.simplefilter(action='default', category=pd.errors.PerformanceWarning)
-            df.sort_index(level="cath", inplace=True)
+            df.sort_index(level="label", inplace=True)
 
-        df.sort_index(level="cath", inplace=True)
+        df.sort_index(level="label", inplace=True)
         df.to_csv(df_path, index=False)
-        print(df)
+        #print(df)
         print(f"\033]0;Training (DONE)\a")
 
     if view:
