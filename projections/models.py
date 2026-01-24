@@ -152,38 +152,56 @@ class SmallNetQMINST(nn.Module):
         self.n_features = n_features
         self.n_channels = n_channels
         self.fig_size = fig_size
-        self.inner_figs = [int(self.fig_size/2)]
-        self.channels = [self.n_channels, 32]
+        self.inner_figs = [int(self.fig_size/2), int(self.fig_size/4)+1]
+        self.channels = [self.n_channels, 32, 128]
 
         self.f_layers = [
 
-            nn.Conv2d(self.channels[0], self.channels[1], 3, stride=2, padding=1), # 1, 32, 14, 14
-            nn.ReLU(),
-            nn.Flatten(), # 1,6272
-            nn.Linear(self.inner_figs[0] * self.inner_figs[0] * self.channels[1], n_features),
+            nn.Conv2d(self.channels[0], self.channels[1], 3, stride=2, padding=1), # 1, 32, 14, 14 (6272)
+            nn.LeakyReLU(),
+            nn.Conv2d(self.channels[1], self.channels[2], 2, stride=2, padding=1),  # 1, 128, 8, 8 (8192)
+            nn.LeakyReLU(),
+            nn.Flatten(), # 1, (flat)
+            nn.Linear(self.inner_figs[1] * self.inner_figs[1] * self.channels[2], n_features),
             nn.Softmax(dim=-1)
         ]
 
 
 
         self.r_layers = [
-            nn.Linear(n_features, self.inner_figs[0] * self.inner_figs[0] * self.channels[1]),
-            nn.Unflatten(-1, (self.channels[1], self.inner_figs[0], self.inner_figs[0])),
-            nn.ReLU(),
+            nn.Linear(n_features, self.inner_figs[1] * self.inner_figs[1] * self.channels[2]),
+            nn.Unflatten(-1, (self.channels[2], self.inner_figs[1], self.inner_figs[1])),
+            nn.LeakyReLU(),
+            nn.ConvTranspose2d(self.channels[2], self.channels[1], 2, stride=2, padding=1, output_padding=0),
+            nn.LeakyReLU(),
             nn.ConvTranspose2d(self.channels[1], self.channels[0], 3, stride=2, padding=1, output_padding=1),
+
             nn.Softmax(dim=-1)
         ]
         self.f_net = nn.Sequential(*self.f_layers)
         self.r_net = nn.Sequential(*self.r_layers)
 
     def forward(self, x):
+        return self._forward(x)
+
+    def backward(self, x):
+        return self._backward(x)
+
+    def _forward(self, x):
         if len(x.shape) == 3:
             x = x.reshape([1, *x.shape])
         x = self.f_net(x)
         return x
 
-    def backward(self, x):
+    def _backward(self, x):
         x = self.r_net(x)
+        return x
+
+    def auto(self, x):
+        print("Encoding")
+        x = self._forward(x)
+        print("Decoding")
+        x = self._backward(x)
         return x
 
 

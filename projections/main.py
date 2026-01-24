@@ -133,6 +133,10 @@ def get_PCA(force=False, labs=True, images=True):
         file_folder = bi.biopython.downloadPDB("../internship/data", "cath-nonredundant-S20",
                                                        file_path="../internship/data/cath-dataset-nonredundant-S20.list", file_format="cif",
                                                        overwrite=False)
+    elif "amys" in sys.argv:
+        file_folder = bi.biopython.downloadPDB("../internship/data", "amys",
+                                                       file_path="../internship/data/amys.txt", file_format="cif",
+                                                       overwrite=False)
     else:
         file_folder = bi.biopython.downloadPDB("../internship/data", "receptors", file_path="../internship/data/receptors.txt", file_format="cif", overwrite=False)
     batches = split_iterable(sorted(os.listdir(file_folder)))
@@ -262,7 +266,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
         from models import SmallNetv3 as SmallNet
         M = SmallNet
 
-    elif "QMNIST" in sys.argv:
+    elif "QMNIST" in sys.argv or "modelq" in sys.argv:
         from models import SmallNetQMINST as SmallNet
         M = SmallNet
 
@@ -275,6 +279,11 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
         dataset_name = "cath"
         file_folder = bi.biopython.downloadPDB("../internship/data", "cath-nonredundant-S20",
                                                file_path="../internship/data/cath-dataset-nonredundant-S20.list", file_format="cif",
+                                               overwrite=False)
+    elif "amys" in sys.argv:
+        dataset_name = "amys"
+        file_folder = bi.biopython.downloadPDB("../internship/data", "amys",
+                                               file_path="../internship/data/amys.txt", file_format="cif",
                                                overwrite=False)
     elif "QMNIST" in sys.argv:
         dataset_name = "QMNIST"
@@ -341,7 +350,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
             index_to_label = {0: "other"}
             label_to_index = {"other": 0}
             for k, v in n_labs.items():
-                if v < 10:
+                if v < 200:
                     label_to_index[str(k)] = 0
                     n_labs["other"] +=1
                 else:
@@ -656,7 +665,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
 
         for n, (lab, img) in enumerate(zip(labels, images)):
             #print(lab, img.shape)
-            writer.add_image(f"input/train ({lab})", torch.Tensor(img), 0)
+            writer.add_image(f"input/train ({lab}:{index_to_label[lab]})", torch.Tensor(img), 0)
 
 
 
@@ -706,46 +715,22 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
 
                     loss = criterion(outputs, truth)
                     loss.backward(retain_graph=False)
+                    running_loss += loss.item()
                     optimizer.step()
 
-                    #print("LOSS:", loss.item())
-                    #print(loss.item())
-
-                    #fig, ax = plt.subplots(1, 2, figsize=(10, 5))
 
                     i_optimizer.zero_grad()
                     i_outputs = net.backward(truth)
 
-                    #print(i_outputs[0].shape, imgs[0].shape, imgs[0, :, :-1, :-1].shape)
-                    img = imgs#[0, :, :-1, :-1]
-                    #print(img)
-                    #img = nn.Softmax(dim=1)(img)
-                    #out = nn.Softmax(dim=1)(i_outputs[0])
-                    #print(img.shape)
-                    #print(img)
-                    #ax[0].imshow(img.detach().numpy()[0])
 
-                    #(out.shape)
-                    #print(out)
-                    #ax[1].imshow(out.detach().numpy()[0])
-                    #plt.show()
-
-                    #print(img)
-                    #print(i_outputs[0])
-                    i_loss = i_criterion(i_outputs, img, show=False)
-                    #print("I-LOSS:", i_loss.item())
-                    #print(i_loss.item())
-                    #print(i_loss)
+                    i_loss = i_criterion(i_outputs, imgs, show=False)
                     i_loss.backward()
 
+                    running_i_loss += i_loss.item()
                     i_optimizer.step()
 
-                    # print statistics
-                    running_loss += loss.item()
-                    running_i_loss += i_loss.item()
-                    #if i < 4:
-                    #    #print(net.last_decode)
-                    #    #writer.add_image(f"output/train ({i})", net.last_decode[0], epoch)
+
+
                     if os.environ.get("SLURM_CPUS_PER_TASK", None) is None:
                         print(
                             f'[{epoch + 1:2d}, {i%(splitsize+1):5d}] loss: {running_loss / (i % splitsize + 1):5.3f} i-loss: {running_i_loss / (i % splitsize+1):5.3f}',
@@ -758,24 +743,36 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
                         running_loss = 0.0
                         running_i_loss = 0.0
 
-                        for n, layer in enumerate(net.f_layers):
-                            print(layer.__dict__)
-                            if hasattr(layer, "weight"):
-                                writer.add_histogram(f"encoding/{n}/weight/{layer.__class__.__name__}", torch.flatten(layer.weight),
+                        for n, (f, r) in enumerate(zip(net.f_layers[:-1], net.r_layers[:-1][::-1])):
+                            #print(layer.__dict__)
+                            #print(n, f, r)
+
+                            if hasattr(r, "weight"):
+                                writer.add_histogram(f"weight/decoding/{n}/{r.__class__.__name__}", r.weight,
+                                                     epoch * 10 + i // splitsize)
+                                #print(r.state_dict())
+                                # print(r.weight.shape, r.weight.shape[::-1], f.weight.shape)
+                                # with torch.no_grad():
+                                #     try:
+                                #         f.weight.copy_(r.weight)#.reshape(*r.weight.shape[::-1]))
+                                #         #f.bias.copy_(r.layer_name.bias)
+                                #     except:
+                                #         f.weight.copy_(r.weight.reshape(*r.weight.shape[::-1]))
+
+
+                            if hasattr(r, "bias"):
+                                writer.add_histogram(f"bias/decoding/{n}/{r.__class__.__name__}", r.bias,
                                                      epoch * 10 + i // splitsize)
 
-                            if hasattr(layer, "bias"):
-                                writer.add_histogram(f"encoding/{n}/bias/{layer.__class__.__name__}", torch.flatten(layer.bias),
+
+                            if hasattr(f, "weight") and False:
+                                writer.add_histogram(f"weight/encoding/{n}/{f.__class__.__name__}", f.weight,
                                                      epoch * 10 + i // splitsize)
 
-                        for n, layer in list(enumerate(net.r_layers))[::-1]:
-                            if hasattr(layer, "weight"):
-                                writer.add_histogram(f"decoding/{n}/weight/{layer.__class__.__name__}", torch.flatten(layer.weight),
+                            if hasattr(f, "bias") and False:
+                                writer.add_histogram(f"bias/encoding/{n}/{f.__class__.__name__}", f.bias,
                                                      epoch * 10 + i // splitsize)
 
-                            if hasattr(layer, "bias"):
-                                writer.add_histogram(f"decoding/{n}/bias/{layer.__class__.__name__}", torch.flatten(layer.bias),
-                                                     epoch * 10 + i // splitsize)
 
                         with open("./model.temp.data.json", "w") as f:
                             json.dump(data, f, indent=4)
@@ -840,7 +837,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
             for data in testloader:
 
                 images, labels = data
-                predicts = net(img)
+                predicts = net(images)
                 #print(imgs.shape, labels)
                 for img, label, pred in zip(images, labels, predicts):
                     #print(img.shape, label, pred)
@@ -943,9 +940,11 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
         from torchview import draw_graph
         model_path = f"{M(1).__class__.__name__}_{mode}_{dataset_name}.model.pth"
         model_data = json.load(open(model_path.split(".")[0] + ".model.data.json"))
-        model_graph = draw_graph(M(n_features=model_data["n_features"], fig_size=28, n_channels=1), input_size=(1, 28, 28),
+        net = M(n_features=model_data["n_features"], fig_size=28, n_channels=1)
+        net.forward = net.auto
+        model_graph = draw_graph(net, input_size=(1, 28, 28),
                                  expand_nested=True,
-                                 graph_name="graph_1",
+                                 graph_name=model_path.split(".")[0],
                                  save_graph=True,
                                  )
         #model_graph.visual_graph
@@ -963,7 +962,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
                 mode="projected"
             else:
                 mode = "double_connected"
-            print(M(1).__dict__)
+            #print(M(1).__dict__)
             model_path = f"{M(1).__class__.__name__}_{mode}_{dataset_name}.model.pth"
             print(model_path)
             model_data = json.load(open(model_path.split(".")[0] + ".model.data.json"))
@@ -1039,7 +1038,10 @@ force = "-f" in sys.argv
 if "-l" in sys.argv or "-e" in sys.argv:
     get_PCA(force=force, labs="-l"in sys.argv, images="-e" in sys.argv)
 else:
-    image_classifier(mode="connected", train="-t" in sys.argv, decode="decode" in sys.argv, temp="temp" in sys.argv, view="view" in sys.argv)
+    mode = "connected"
+    if "double" in sys.argv:
+        mode = "double_connected"
+    image_classifier(mode=mode, train="-t" in sys.argv, decode="decode" in sys.argv, temp="temp" in sys.argv, view="view" in sys.argv)
 
 
 
