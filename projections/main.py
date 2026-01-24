@@ -650,6 +650,8 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
         else:
             images = np.array([[trainset.__getitem__(x, as_image=False)[0].numpy()] for x in range(n_samples)])
         #print(images)
+
+        writer.add_graph(net, torch.Tensor(images[0]))
         labels = [trainset[x][1] for x in range(n_samples)]
 
         for n, (lab, img) in enumerate(zip(labels, images)):
@@ -759,20 +761,20 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
                         for n, layer in enumerate(net.f_layers):
                             print(layer.__dict__)
                             if hasattr(layer, "weight"):
-                                writer.add_histogram(f"decoding/{n}/weight/{layer.__class__.__name__}", layer.weight,
+                                writer.add_histogram(f"encoding/{n}/weight/{layer.__class__.__name__}", torch.flatten(layer.weight),
                                                      epoch * 10 + i // splitsize)
 
                             if hasattr(layer, "bias"):
-                                writer.add_histogram(f"decoding/{n}/bias/{layer.__class__.__name__}", layer.bias,
+                                writer.add_histogram(f"encoding/{n}/bias/{layer.__class__.__name__}", torch.flatten(layer.bias),
                                                      epoch * 10 + i // splitsize)
 
-                        for n, layer in enumerate(net.r_layers[::-1]):
+                        for n, layer in list(enumerate(net.r_layers))[::-1]:
                             if hasattr(layer, "weight"):
-                                writer.add_histogram(f"decoding/{n}/weight/{layer.__class__.__name__}", layer.weight,
+                                writer.add_histogram(f"decoding/{n}/weight/{layer.__class__.__name__}", torch.flatten(layer.weight),
                                                      epoch * 10 + i // splitsize)
 
                             if hasattr(layer, "bias"):
-                                writer.add_histogram(f"decoding/{n}/bias/{layer.__class__.__name__}", layer.bias,
+                                writer.add_histogram(f"decoding/{n}/bias/{layer.__class__.__name__}", torch.flatten(layer.bias),
                                                      epoch * 10 + i // splitsize)
 
                         with open("./model.temp.data.json", "w") as f:
