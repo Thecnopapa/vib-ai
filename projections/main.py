@@ -630,8 +630,9 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
 
         import torch.optim as optim
         import torch
+        import torchvision
 
-        from models import DiceLoss, SimpleLoss, SimpleImageLoss
+        from models import DiceLoss, SimpleLoss, SimpleImageLoss, RotLoss
 
 
         #criterion = SimpleLoss
@@ -640,7 +641,8 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
         optimizer = optim.Adam(net.f_net.parameters(), lr=0.0005)
 
         #i_criterion = DiceLoss
-        i_criterion = nn.MSELoss()
+        i_loss_fn = nn.MSELoss()
+        i_criterion = RotLoss
         i_optimizer = optim.Adam(net.r_net.parameters(), lr=0.0005)
 
 
@@ -724,7 +726,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
                     i_outputs = net.backward(truth)
 
 
-                    i_loss = i_criterion(i_outputs, imgs)
+                    i_loss = i_criterion(i_outputs, imgs, i_loss_fn)
                     i_loss.backward()
 
                     running_i_loss += i_loss.item()

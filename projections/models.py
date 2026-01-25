@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import matplotlib.pyplot as plt
+import torchvision
 
 
 
@@ -58,6 +59,51 @@ def SimpleImageLoss(pred, target, smoot=None, show=False):
 
     loss = 1 + torch.mean(diff)
     return loss
+
+
+def RotLoss(pred, target, loss_fn, smooth=0, show=True):
+
+    targets= [target]
+    angles =[90, 180, 270]
+    flip_axes = ((-2,), (-1,))
+
+    for a in angles:
+        r = torchvision.transforms.functional.rotate(target, a)
+        targets.append(r)
+    
+    for a in flip_axes:
+        f = torch.flip(target, tuple(a))
+        targets.append(f)
+
+    #print(targets)
+
+
+    losses = [loss_fn(pred, t) for t in targets]
+    #print(losses)
+    
+    if show:
+        fig, axes = plt.subplots(1, 7, figsize=(24, 3))
+        axes[0].imshow(pred.detach().numpy()[0][0])
+
+    
+    
+        for ax, t, l in zip(axes[1:], targets, losses):
+            #print(t.shape)
+            ax.imshow(t.detach().numpy()[0][0])
+            ax.set_title(f"{l:.3f}")
+
+        fig.savefig("/storage/emulated/0/Download/RotLoss.png")
+    
+    
+    loss = min(losses)
+    #print(loss)
+
+    
+    return loss
+
+
+
+
 
 
 
