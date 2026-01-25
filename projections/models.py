@@ -62,7 +62,7 @@ def SimpleImageLoss(pred, target, smoot=None, show=False):
     return loss
 
 
-def RotLoss(pred, target, loss_fn, smooth=0, show=True):
+def RotLoss(pred, target, loss_fn, smooth=0, show=True, label=""):
     #print(np.random.rand(1)[0])
     show = np.random.rand(1)[0] <= 0.001
     targets= [target]
@@ -84,8 +84,10 @@ def RotLoss(pred, target, loss_fn, smooth=0, show=True):
     #print(losses)
 
     if show:
-        fig, axes = plt.subplots(1, 7, figsize=(24, 3))
+        fig, axes = plt.subplots(1, 7, figsize=(24, 4))
         axes[0].imshow(pred.detach().numpy()[0][0])
+        #print(label)
+        fig.suptitle(label)
 
 
 
@@ -95,7 +97,7 @@ def RotLoss(pred, target, loss_fn, smooth=0, show=True):
             ax.set_title(f"{l:.3f}")
 
         #fig.savefig("/storage/emulated/0/Download/RotLoss.png")
-        fig.savefig("figs/RotLoss.png")
+        plt.savefig("figs/RotLoss.png")
         plt.close()
 
 

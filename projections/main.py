@@ -355,11 +355,10 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
 
             index_to_label = {0: "other"}
             label_to_index = {"other": 0}
-            for k, v in n_labs.items():
-                if (v < 300 and len(n_labs) > 10) or v < 2:
+            for n, (k, v) in enumerate(n_labs.items()):
+                if n >= 10:
                     label_to_index[str(k)] = 0
                     n_labs["other"] +=1
-
                 else:
                     n = len(index_to_label)
                     label_to_index[str(k)] = int(n)
@@ -500,7 +499,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
                             splitted["test"][lab] = []
                             #print("new lab:", lab)
                 if split:
-                    for lab in splitted["train"].keys():
+                    for lab in sorted(splitted["train"].keys(), key= lambda x: len(splitted["train"][x]), reverse=True)[:10]:
                         print("-",lab, len(splitted["train"][lab]), len(splitted["test"][lab]))
 
 
@@ -513,7 +512,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
                     tr = []
                     te = []
                     for trv, tev in zip(splitted["train"].values(), splitted["test"].values()):
-                        print(trv, tev)
+                        #print(trv, tev)
                         for c in trv:
                             tr.append(c)
                         for c in tev:
@@ -651,7 +650,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
         i_criterion = RotLoss
         i_optimizer = optim.Adam(net.r_net.parameters(), lr=0.0005)
 
-        auto_optimiser = optim.Adam(net.auto_f_net.parameters(), lr=0.0005)
+        auto_optimiser = optim.Adam(net.auto_f_net.parameters(), lr=0.0001)
 
 
         epochs = 100
@@ -693,7 +692,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
                 running_i_loss = 0.0
                 running_auto_loss = 0.0
                 if os.environ.get("SLURM_CPUS_PER_TASK", None) is None:
-                    print(f'[{epoch + 1:2d}, {0:5d}] loss: {0.:5.3f} i-loss: {0.:5.3f}',end="\r")
+                    print(f'{0:4d}[{epoch + 1:2d}, {0:5d}] loss: {0.:5.3f} i-loss: {0.:5.3f}',end="\r")
 
                 for i, d in enumerate(trainloader):
                     step = epoch*10+i//splitsize
@@ -704,14 +703,16 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
                         imgs = imgs.reshape([1, *imgs.shape])
 
                     truth = [0.] * len(labs)
-                    truth[labels[0]] = 1.
+                    truth[int(labels[0])] = 1.
                     truth = torch.Tensor(truth)
                     truth = truth.reshape(1, *truth.shape)
 
                     if net_mode == "auto":
                         auto_optimiser.zero_grad()
+                        #print("\nlab:", int(labels[0]))
+                        #print("\nlabname:", index_to_label[int(labels[0])])
 
-                        auto_loss = i_criterion(net.forward(imgs), imgs, i_loss_fn) + criterion(net.forward(imgs, mode="normal"), truth)
+                        auto_loss = i_criterion(net.forward(imgs), imgs, i_loss_fn, label=index_to_label[int(labels[0])]) + criterion(net.forward(imgs, mode="normal"), truth)
                         auto_loss.backward()
                         running_auto_loss += auto_loss.item()
                         auto_optimiser.step()
@@ -741,10 +742,10 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
 
                     if os.environ.get("SLURM_CPUS_PER_TASK", None) is None:
                         print(
-                            f'{step:2d}[{epoch + 1:2d}, {i%(splitsize+1):5d}] loss: {running_loss / (i % splitsize + 1):5.3f} i-loss: {running_i_loss / (i % splitsize+1):5.3f} auto-loss: {running_auto_loss / (i % splitsize+1):5.3f}', end="\r")
+                            f'{step+1:4d}[{epoch + 1:2d}, {i%(splitsize+1):5d}] loss: {running_loss / (i % splitsize + 1):5.3f} i-loss: {running_i_loss / (i % splitsize+1):5.3f} auto-loss: {running_auto_loss / (i % splitsize+1):5.3f}', end="\r")
 
                     if i % splitsize == 0 and i != 0:  # print every 1000 mini-batches
-                        print(f'{step:2d}[{epoch + 1:2d}, {i:5d}] loss: {running_loss / splitsize:5.3f} i-loss: {running_i_loss / splitsize:5.3f} auto-loss: {running_auto_loss / splitsize:5.3f}', end = "\n")
+                        print(f'{step:4d}[{epoch + 1:2d}, {i:5d}] loss: {running_loss / splitsize:5.3f} i-loss: {running_i_loss / splitsize:5.3f} auto-loss: {running_auto_loss / splitsize:5.3f}', end = "\n")
                         writer.add_scalar(f"loss/encode ({criterion.__class__.__name__})", running_loss / splitsize, step)
                         writer.add_scalar(f"loss/decode ({i_criterion.__class__.__name__})", running_i_loss / splitsize, step)
                         writer.add_scalar(f"loss/auto ({i_criterion.__class__.__name__})", running_auto_loss / splitsize, step)
@@ -792,12 +793,14 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
                                     print(e)
                                     raise e
                                     continue
+                PATH = f'./{net.__class__.__name__}_{mode}_{dataset_name}.model.pth'
+                torch.save(net.state_dict(), PATH)
             print()
             print('Finished Training ({} epochs)'.format(epochs))
 
             PATH = f'./{net.__class__.__name__}_{mode}_{dataset_name}.model.pth'
-
             torch.save(net.state_dict(), PATH)
+
         except KeyboardInterrupt:
             PATH = f'./model.temp.pth'
 
