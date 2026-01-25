@@ -62,9 +62,9 @@ def SimpleImageLoss(pred, target, smoot=None, show=False):
     return loss
 
 
-def RotLoss(pred, target, loss_fn, smooth=0, show=True, label=""):
+def RotLoss(pred, target, loss_fn, smooth=0, show=False, label=""):
     #print(np.random.rand(1)[0])
-    show = np.random.rand(1)[0] <= 0.001
+    show = show and np.random.rand(1)[0] <= 0.001 and os.environ.get("SLURM_CPUS_PER_TASK", None) is None
     targets= [target]
     angles =[90, 180, 270]
     flip_axes = ((-2,), (-1,))
@@ -215,6 +215,8 @@ class SmallNetQMINST(nn.Module):
             nn.Conv2d(self.channels[1], self.channels[2], 2, stride=2, padding=1),  # 1, 128, 8, 8 (8192)
             nn.LeakyReLU(),
             nn.Flatten(), # 1, (flat)
+            nn.Linear(self.inner_figs[1] * self.inner_figs[1] * self.channels[2], self.inner_figs[1] * self.inner_figs[1] * self.channels[2]),
+            nn.LeakyReLU(),
             nn.Linear(self.inner_figs[1] * self.inner_figs[1] * self.channels[2], n_features),
             nn.Softmax(dim=-1)
         ]
@@ -223,6 +225,8 @@ class SmallNetQMINST(nn.Module):
 
         self.r_layers = [
             nn.Linear(n_features, self.inner_figs[1] * self.inner_figs[1] * self.channels[2]),
+            nn.LeakyReLU(),
+            nn.Linear(self.inner_figs[1] * self.inner_figs[1] * self.channels[2], self.inner_figs[1] * self.inner_figs[1] * self.channels[2]),
             nn.Unflatten(-1, (self.channels[2], self.inner_figs[1], self.inner_figs[1])),
             nn.LeakyReLU(),
             nn.ConvTranspose2d(self.channels[2], self.channels[1], 2, stride=2, padding=1, output_padding=0),
