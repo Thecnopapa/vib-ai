@@ -231,33 +231,36 @@ class SmallNetQMINST(nn.Module):
         ]
         self.f_net = nn.Sequential(*self.f_layers)
         self.r_net = nn.Sequential(*self.r_layers)
-
+        self.auto_f_net = nn.Sequential(*self.f_layers, *self.r_layers)
+        self.auto_r_net = nn.Sequential(*self.r_layers[::-1], *self.f_layers[::-1])
     def forward(self, x, mode=None):
         if mode is None:
             mode = self.mode
+        if len(x.shape) == 3:
+            x = x.reshape([1, *x.shape])
 
         if mode == "normal":
             return self._forward(x)
         elif mode == "auto":
-            return self.auto_f(x)
+            return self._auto_forward(x)
         else:
             return None
 
     def backward(self, x, mode=None):
         if mode is None:
             mode = self.mode
+        if len(x.shape) == 3:
+            x = x.reshape([1, *x.shape])
 
         if mode == "normal":
             return self._backward(x)
         elif mode == "auto":
-            return self.auto_r(x)
+            return self.auto_r_net(x)
         else:
             return None
 
 
     def _forward(self, x):
-        if len(x.shape) == 3:
-            x = x.reshape([1, *x.shape])
         x = self.f_net(x)
         return x
 
@@ -265,18 +268,12 @@ class SmallNetQMINST(nn.Module):
         x = self.r_net(x)
         return x
 
-    def auto_f(self, x):
-        #print("Encoding")
-        x = self._forward(x)
-        #print("Decoding")
-        x = self._backward(x)
+    def _auto_forward(self, x):
+        x = self.auto_f_net(x)
         return x
 
-    def auto_r(self, x):
-        #print("Decoding")
-        x = self._backward(x)
-        #print("Encoding")
-        x = self._forward(x)
+    def _auto_backward(self, x):
+        x = self.auto_r_net(x)
         return x
 
 

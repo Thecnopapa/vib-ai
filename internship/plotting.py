@@ -26,7 +26,7 @@ def plot_confusion(preds, labels, title, score, classes):
         sb.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=classes, yticklabels=classes)
         plt.xlabel("Predicted")
         plt.ylabel("True")
-        plt.title(f"{title}_S={score:.3f}")
+        plt.title(f"{title}_S={score:.2f}")
         os.makedirs("figs", exist_ok=True)
         plt.savefig(f"figs/{title}_confusion.png")
     except Exception as e:

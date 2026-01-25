@@ -288,11 +288,17 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
     elif "QMNIST" in sys.argv:
         dataset_name = "QMNIST"
         file_folder = None
+        mode="none"
     else:
         dataset_name = "rcps"
         file_folder = bi.biopython.downloadPDB("../internship/data", "receptors",
                                                file_path="../internship/data/receptors.txt", file_format="cif",
                                                overwrite=False)
+
+    if "auto" in sys.argv:
+        net_mode = "auto"
+    else:
+        net_mode = "normal"
 
     transform = transforms.Compose(
         [transforms.ToTensor(),
@@ -614,8 +620,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
 
 
 
-
-        net = M(len(labs), n_channels=trainset.channels, fig_size=trainset.image_dims)
+        net = M(len(labs), n_channels=trainset.channels, fig_size=trainset.image_dims, mode=net_mode)
         data = {}
         data["model_name"] = f"{net.__class__.__name__}_{mode}_{dataset_name}"
         data["name"] = str(net.__class__.__name__)
@@ -646,6 +651,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
         i_criterion = RotLoss
         i_optimizer = optim.Adam(net.r_net.parameters(), lr=0.0005)
 
+        auto_optimiser = optim.Adam(net.auto_f_net.parameters(), lr=0.0005)
 
 
         epochs = 100
@@ -685,97 +691,80 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
 
                 running_loss = 0.0
                 running_i_loss = 0.0
+                running_auto_loss = 0.0
                 if os.environ.get("SLURM_CPUS_PER_TASK", None) is None:
                     print(f'[{epoch + 1:2d}, {0:5d}] loss: {0.:5.3f} i-loss: {0.:5.3f}',end="\r")
 
                 for i, d in enumerate(trainloader):
                     step = epoch*10+i//splitsize
-                    #print(i, d)
-                    # if "QMNIST" in sys.argv:
-                    #     # get the inputs; data is a list of [inputs, labels]
-                    #     imgs, labels = [x[0] for x in d][0], [x[1] for x in d]
-                    # else:
+
                     imgs, labels = d
-                    #print(imgs, labels)
+
                     if len(imgs.shape) == 3:
                         imgs = imgs.reshape([1, *imgs.shape])
-                    #print(imgs)
 
-                    #print("IMG:")
-                    #print(imgs)
-                    #print(imgs.shape)
-                    #exit()
-                    # zero the parameter gradients
-                    optimizer.zero_grad()
-
-                    outputs = net(imgs)
-                    #pred = torch.max(outputs, 1).indices[0]
-                    #print(pred)
-                    truth = [0.]*len(labs)
-                    #print(labels)
+                    truth = [0.] * len(labs)
                     truth[labels[0]] = 1.
                     truth = torch.Tensor(truth)
-                    truth = truth.reshape(1,*truth.shape)
+                    truth = truth.reshape(1, *truth.shape)
 
-                    loss = criterion(outputs, truth)
-                    loss.backward(retain_graph=False)
-                    running_loss += loss.item()
-                    optimizer.step()
+                    if net_mode == "auto":
+                        auto_optimiser.zero_grad()
+
+                        auto_loss = i_criterion(net.forward(imgs), imgs, i_loss_fn) + criterion(net.forward(imgs, mode="normal"), truth)
+                        auto_loss.backward()
+                        running_auto_loss += auto_loss.item()
+                        auto_optimiser.step()
+                    else:
+                        optimizer.zero_grad()
+                        i_optimizer.zero_grad()
+
+                        outputs = net(imgs)
+                        # pred = torch.max(outputs, 1).indices[0]
+                        # print(pred)
 
 
-                    i_optimizer.zero_grad()
-                    i_outputs = net.backward(truth)
+                        loss = criterion(outputs, truth)
+                        loss.backward(retain_graph=False)
+                        running_loss += loss.item()
 
+                        i_outputs = net.backward(truth)
+                        i_loss = i_criterion(i_outputs, imgs, i_loss_fn)
+                        i_loss.backward()
 
-                    i_loss = i_criterion(i_outputs, imgs, i_loss_fn)
-                    i_loss.backward()
+                        running_i_loss += i_loss.item()
 
-                    running_i_loss += i_loss.item()
-                    i_optimizer.step()
+                        optimizer.step()
+                        i_optimizer.step()
 
 
 
                     if os.environ.get("SLURM_CPUS_PER_TASK", None) is None:
                         print(
-                            f'[{epoch + 1:2d}, {i%(splitsize+1):5d}] loss: {running_loss / (i % splitsize + 1):5.3f} i-loss: {running_i_loss / (i % splitsize+1):5.3f}',
-                            end="\r")
+                            f'{step:2d}[{epoch + 1:2d}, {i%(splitsize+1):5d}] loss: {running_loss / (i % splitsize + 1):5.3f} i-loss: {running_i_loss / (i % splitsize+1):5.3f} auto-loss: {running_auto_loss / (i % splitsize+1):5.3f}', end="\r")
 
                     if i % splitsize == 0 and i != 0:  # print every 1000 mini-batches
-                        print(f'[{epoch + 1:2d}, {i:5d}] loss: {running_loss / splitsize:5.3f} i-loss: {running_i_loss / splitsize:5.3f}', end = "\n")
+                        print(f'{step:2d}[{epoch + 1:2d}, {i:5d}] loss: {running_loss / splitsize:5.3f} i-loss: {running_i_loss / splitsize:5.3f} auto-loss: {running_auto_loss / splitsize:5.3f}', end = "\n")
                         writer.add_scalar(f"loss/encode ({criterion.__class__.__name__})", running_loss / splitsize, step)
                         writer.add_scalar(f"loss/decode ({i_criterion.__class__.__name__})", running_i_loss / splitsize, step)
+                        writer.add_scalar(f"loss/auto ({i_criterion.__class__.__name__})", running_auto_loss / splitsize, step)
+
                         running_loss = 0.0
                         running_i_loss = 0.0
+                        running_auto_loss = 0.0
 
                         for n, (f, r) in enumerate(zip(net.f_layers[:-1], net.r_layers[:-1][::-1])):
                             #print(layer.__dict__)
                             #print(n, f, r)
 
                             if hasattr(r, "weight"):
-                                writer.add_histogram(f"weight/decoding/{n}/{r.__class__.__name__}", r.weight,
-                                                     epoch * 10 + i // splitsize)
-                                #print(r.state_dict())
-                                # print(r.weight.shape, r.weight.shape[::-1], f.weight.shape)
-                                # with torch.no_grad():
-                                #     try:
-                                #         f.weight.copy_(r.weight)#.reshape(*r.weight.shape[::-1]))
-                                #         #f.bias.copy_(r.layer_name.bias)
-                                #     except:
-                                #         f.weight.copy_(r.weight.reshape(*r.weight.shape[::-1]))
-
-
+                                writer.add_histogram(f"weight/decoding/{n}/{r.__class__.__name__}", r.weight, epoch * 10 + i // splitsize)
                             if hasattr(r, "bias"):
-                                writer.add_histogram(f"bias/decoding/{n}/{r.__class__.__name__}", r.bias,
-                                                     epoch * 10 + i // splitsize)
-
-
+                                writer.add_histogram(f"bias/decoding/{n}/{r.__class__.__name__}", r.bias, epoch * 10 + i // splitsize)
                             if hasattr(f, "weight"):
-                                writer.add_histogram(f"weight/encoding/{n}/{f.__class__.__name__}", f.weight,
-                                                     epoch * 10 + i // splitsize)
-
+                                writer.add_histogram(f"weight/encoding/{n}/{f.__class__.__name__}", f.weight, epoch * 10 + i // splitsize)
                             if hasattr(f, "bias"):
-                                writer.add_histogram(f"bias/encoding/{n}/{f.__class__.__name__}", f.bias,
-                                                     epoch * 10 + i // splitsize)
+                                writer.add_histogram(f"bias/encoding/{n}/{f.__class__.__name__}", f.bias, epoch * 10 + i // splitsize)
 
 
                         with open("./model.temp.data.json", "w") as f:
@@ -795,7 +784,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
                                     #print(bits)
                                     bits = torch.Tensor(bits)
                                     #print("BITS LAB:", bits)
-                                    dec = net.backward(bits)
+                                    dec = net.backward(bits, mode="normal")
                                     #print(dec)
                                     #print(dec.shape)
                                     writer.add_image(f"classes/{l}", dec, step)
@@ -841,7 +830,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
             for data in testloader:
 
                 images, labels = data
-                predicts = net(images)
+                predicts = net(images, mode="normal")
                 #print(imgs.shape, labels)
                 for img, label, pred in zip(images, labels, predicts):
                     #print(img.shape, label, pred)
@@ -874,7 +863,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
 
 
         from internship.plotting import plot_confusion
-        plot_confusion(truths, pres, f"{net.__class__.__name__}_{mode}_{dataset_name}", 100 * correct // total, sorted(labs))
+        plot_confusion(truths, pres, f"{net.__class__.__name__}_{mode}_{dataset_name}", 100 * correct / total, sorted(labs))
 
 
 
@@ -944,12 +933,13 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
         from torchview import draw_graph
         model_path = f"{M(1).__class__.__name__}_{mode}_{dataset_name}.model.pth"
         model_data = json.load(open(model_path.split(".")[0] + ".model.data.json"))
-        net = M(n_features=model_data["n_features"], fig_size=28, n_channels=1)
-        net.forward = net.auto
+        net = M(n_features=model_data["n_features"], fig_size=28, n_channels=1, mode=net_mode)
+
         model_graph = draw_graph(net, input_size=(1, 28, 28),
                                  expand_nested=True,
                                  graph_name=model_path.split(".")[0],
                                  save_graph=True,
+                                 directory="figs"
                                  )
         #model_graph.visual_graph
         #input("Press Enter to continue...")
