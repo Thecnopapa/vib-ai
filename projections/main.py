@@ -350,7 +350,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
             index_to_label = {0: "other"}
             label_to_index = {"other": 0}
             for k, v in n_labs.items():
-                if v < 200:
+                if v < 300:
                     label_to_index[str(k)] = 0
                     n_labs["other"] +=1
                 else:
@@ -637,10 +637,11 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
         #criterion = SimpleLoss
         criterion = nn.MSELoss()
 
-        optimizer = optim.Adam(net.f_net.parameters(), lr=0.001)
+        optimizer = optim.Adam(net.f_net.parameters(), lr=0.0005)
 
-        i_criterion = DiceLoss
-        i_optimizer = optim.Adam(net.r_net.parameters(), lr=0.001)
+        #i_criterion = DiceLoss
+        i_criterion = nn.MSELoss()
+        i_optimizer = optim.Adam(net.r_net.parameters(), lr=0.0005)
 
 
 
@@ -723,7 +724,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
                     i_outputs = net.backward(truth)
 
 
-                    i_loss = i_criterion(i_outputs, imgs, show=False)
+                    i_loss = i_criterion(i_outputs, imgs)
                     i_loss.backward()
 
                     running_i_loss += i_loss.item()
@@ -765,11 +766,11 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
                                                      epoch * 10 + i // splitsize)
 
 
-                            if hasattr(f, "weight") and False:
+                            if hasattr(f, "weight"):
                                 writer.add_histogram(f"weight/encoding/{n}/{f.__class__.__name__}", f.weight,
                                                      epoch * 10 + i // splitsize)
 
-                            if hasattr(f, "bias") and False:
+                            if hasattr(f, "bias"):
                                 writer.add_histogram(f"bias/encoding/{n}/{f.__class__.__name__}", f.bias,
                                                      epoch * 10 + i // splitsize)
 
