@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import matplotlib.pyplot as plt
+import numpy as np
 import torchvision
 
 
@@ -62,7 +63,8 @@ def SimpleImageLoss(pred, target, smoot=None, show=False):
 
 
 def RotLoss(pred, target, loss_fn, smooth=0, show=True):
-
+    #print(np.random.rand(1)[0])
+    show = np.random.rand(1)[0] <= 0.001
     targets= [target]
     angles =[90, 180, 270]
     flip_axes = ((-2,), (-1,))
@@ -70,7 +72,7 @@ def RotLoss(pred, target, loss_fn, smooth=0, show=True):
     for a in angles:
         r = torchvision.transforms.functional.rotate(target, a)
         targets.append(r)
-    
+
     for a in flip_axes:
         f = torch.flip(target, tuple(a))
         targets.append(f)
@@ -80,25 +82,27 @@ def RotLoss(pred, target, loss_fn, smooth=0, show=True):
 
     losses = [loss_fn(pred, t) for t in targets]
     #print(losses)
-    
+
     if show:
         fig, axes = plt.subplots(1, 7, figsize=(24, 3))
         axes[0].imshow(pred.detach().numpy()[0][0])
 
-    
-    
+
+
         for ax, t, l in zip(axes[1:], targets, losses):
             #print(t.shape)
             ax.imshow(t.detach().numpy()[0][0])
             ax.set_title(f"{l:.3f}")
 
-        fig.savefig("/storage/emulated/0/Download/RotLoss.png")
-    
-    
+        #fig.savefig("/storage/emulated/0/Download/RotLoss.png")
+        fig.savefig("figs/RotLoss.png")
+        plt.close()
+
+
     loss = min(losses)
     #print(loss)
 
-    
+
     return loss
 
 
@@ -193,13 +197,14 @@ def test_layer(x):
 
 
 class SmallNetQMINST(nn.Module):
-    def __init__(self, n_features=10, n_channels=1, fig_size=28, batch_size=1):
+    def __init__(self, n_features=10, n_channels=1, fig_size=28, batch_size=1, mode="normal"):
         super().__init__()
         self.n_features = n_features
         self.n_channels = n_channels
         self.fig_size = fig_size
         self.inner_figs = [int(self.fig_size/2), int(self.fig_size/4)+1]
         self.channels = [self.n_channels, 32, 128]
+        self.mode = mode
 
         self.f_layers = [
 
@@ -227,11 +232,28 @@ class SmallNetQMINST(nn.Module):
         self.f_net = nn.Sequential(*self.f_layers)
         self.r_net = nn.Sequential(*self.r_layers)
 
-    def forward(self, x):
-        return self._forward(x)
+    def forward(self, x, mode=None):
+        if mode is None:
+            mode = self.mode
 
-    def backward(self, x):
-        return self._backward(x)
+        if mode == "normal":
+            return self._forward(x)
+        elif mode == "auto":
+            return self.auto_f(x)
+        else:
+            return None
+
+    def backward(self, x, mode=None):
+        if mode is None:
+            mode = self.mode
+
+        if mode == "normal":
+            return self._backward(x)
+        elif mode == "auto":
+            return self.auto_r(x)
+        else:
+            return None
+
 
     def _forward(self, x):
         if len(x.shape) == 3:
@@ -243,11 +265,18 @@ class SmallNetQMINST(nn.Module):
         x = self.r_net(x)
         return x
 
-    def auto(self, x):
-        print("Encoding")
+    def auto_f(self, x):
+        #print("Encoding")
         x = self._forward(x)
-        print("Decoding")
+        #print("Decoding")
         x = self._backward(x)
+        return x
+
+    def auto_r(self, x):
+        #print("Decoding")
+        x = self._backward(x)
+        #print("Encoding")
+        x = self._forward(x)
         return x
 
 

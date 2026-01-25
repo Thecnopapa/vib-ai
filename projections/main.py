@@ -350,9 +350,10 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
             index_to_label = {0: "other"}
             label_to_index = {"other": 0}
             for k, v in n_labs.items():
-                if v < 300:
+                if (v < 300 and len(n_labs) > 10) or v < 2:
                     label_to_index[str(k)] = 0
                     n_labs["other"] +=1
+
                 else:
                     n = len(index_to_label)
                     label_to_index[str(k)] = int(n)
