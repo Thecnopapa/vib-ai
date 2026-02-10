@@ -944,7 +944,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
                                  save_graph=True,
                                  directory="figs"
                                  )
-        #model_graph.visual_graph
+        model_graph.visual_graph
         #input("Press Enter to continue...")
 
     if decode:
