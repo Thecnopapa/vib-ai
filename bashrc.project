@@ -23,11 +23,11 @@
 RCFILE=~/.bashrc
 SCRIPT_NAME="bashrc.project"
 CONDA_ENV="default" # =folder name
-RUN_COMMAND="default" # =folder name
+RUN_COMMAND="vibai" # =folder name
 SHELL=bash
 ENV_FILE="environment.yml"
-CONDA_ENV_FILE="environment-conda-only.txt"
-PIP_ENV_FILE="environment.txt"
+CONDA_ENV_FILE="requirements-conda.txt"
+PIP_ENV_FILE="requirements.txt"
 CONDA_ENV_FOLDER="$(dirname $(dirname $CONDA_EXE) )/envs"
 
 BLUE="\[\e[94m\]"
@@ -137,11 +137,11 @@ fi
 
 if [[ $* == "update" ]]; then
   echo "* Updating requirements..."
-  if [[ --f $CONDA_ENV_FILE ]]; then
+  if [[ -f $CONDA_ENV_FILE ]]; then
     echo "* CONDA requirements from: ${CONDA_ENV_FILE}..."
     conda install --solver libmamba --file  $CONDA_ENV_FILE && echo "* CONDA requirements installed"
   fi
-  if [[ --f $PIP_ENV_FILE ]]; then
+  if [[ -f $PIP_ENV_FILE ]]; then
     echo "* PIP requirements from: ${PIP_ENV_FILE}..."
     pip install -r  $PIP_ENV_FILE && echo "* PIP requirements installed"
   fi
