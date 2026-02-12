@@ -2,19 +2,33 @@ import os, sys, json, glob
 import warnings
 import numpy as np
 import pandas as pd
-
-
 from bioiain.utilities import str_to_list_with_literals, find_com
-
 import PIL.Image
 import matplotlib.pyplot as plt
 import torchvision.transforms as T
 from mpl_toolkits.axes_grid1 import ImageGrid
-
 from parallel import *
+
 sys.path.append('..')
 np.random.seed(6)
 
+files_selected = list()
+from collections import defaultdict
+
+file_folder = "/media/mari/Data/vib_leuven/datasets/cc_sasa/biomols"
+files_list = os.listdir(file_folder)
+data_csv = pd.read_csv(sys.argv[-1], sep="\t", header=0)
+files_data = defaultdict(dict)
+for i in data_csv.index:
+    pdb = data_csv.at[i, "pdb"]
+    biomol = data_csv.at[i, "biomol"]
+    orient = data_csv.at[i, "orient"]
+    oligo = data_csv.at[i, "oligo"]
+    files_data[f"{pdb.upper()}_{biomol}.pdb"]["label"] = f"{oligo}_{orient}"
+    files_data[f"{pdb.upper()}_{biomol}.pdb"]["chains"] = data_csv.at[i, "CC_chains"]
+for file in files_list:
+    if file in files_data.keys():
+        files_selected.append(file)
 
 def get_family_desc(fam, cath_folder="cath"):
     fam_list_names_file = os.path.join(cath_folder, "cath-superfamily-list.txt")
@@ -125,21 +139,8 @@ def get_PCA(force=False, labs=True, images=True):
     import matplotlib
     matplotlib.use('agg')
     import matplotlib.pyplot as plt
-    if "mega" in sys.argv:
-        file_folder = bi.biopython.downloadPDB("../internship/data", "mega-batch",
-                                               file_path="../internship/data/mega-batch20K.txt", file_format="cif",
-                                               overwrite=False)
-    elif "cath" in sys.argv:
-        file_folder = bi.biopython.downloadPDB("../internship/data", "cath-nonredundant-S20",
-                                                       file_path="../internship/data/cath-dataset-nonredundant-S20.list", file_format="cif",
-                                                       overwrite=False)
-    elif "amys" in sys.argv:
-        file_folder = bi.biopython.downloadPDB("../internship/data", "amys",
-                                                       file_path="../internship/data/amys.txt", file_format="cif",
-                                                       overwrite=False)
-    else:
-        file_folder = bi.biopython.downloadPDB("../internship/data", "receptors", file_path="../internship/data/receptors.txt", file_format="cif", overwrite=False)
-    batches = split_iterable(sorted(os.listdir(file_folder)))
+
+    batches = split_iterable(sorted(files_selected))
     #[print(b) for b in batches]
     print("FILE_FOLDER:", file_folder)
     os.makedirs("labels", exist_ok=True)
@@ -147,7 +148,8 @@ def get_PCA(force=False, labs=True, images=True):
         print("STARTING BATCH")
         for file in sorted(batch):
             code = file.split(".")[0]
-            structure = bi.biopython.loadPDB(os.path.join(file_folder, f"{code}.cif"))
+            chaincounts = 0
+            structure = bi.biopython.loadPDB(os.path.join(file_folder, f"{file}"))
             labels = {}
             chains = list(structure.get_chains())
             label_path = f"labels/{code}.labels.json"
@@ -155,15 +157,13 @@ def get_PCA(force=False, labs=True, images=True):
             print(structure)
             if ((not os.path.exists(label_path)) or force) and do_labs:
                 for chain in chains:
-                    l = None
-                    cath = parse_cath(code, chain.id)
-                    if cath is not None:
-                        l = f"{cath['class_number']}.{cath['arch_number']}.{cath['top_number']}.{cath['hom_fam_number']}"
-                        labels[chain.id] = {
+                    if chain.id in files_data[file]["chains"]:
+                        l = files_data[file]["label"]
+                        labels[chaincounts] = {
                             "chain_id": chain.id,
-                            "cath": cath,
                             "label": l
                         }
+                        chaincounts+=1
                     #print(f"{chain.id}:{l}", end="\t")
                 json.dump(labels, open(label_path, "w"), indent=4)
             #print("")
@@ -174,67 +174,70 @@ def get_PCA(force=False, labs=True, images=True):
             os.makedirs("imgs", exist_ok=True)
             #if code not in ["1M2Z", "1P93"]:
             #    continue
-            for chain in chains:
-                projected_path = f"imgs/projected/{code}_{chain.id}.png"
-                connected_path = f"imgs/connected/{code}_{chain.id}.png"
-                double_path = f"imgs/double/{code}_{chain.id}.png"
-                double_connected_path = f"imgs/double_connected/{code}_{chain.id}.png"
-                paths = (projected_path, connected_path, double_path, double_connected_path)
+            projected_path = f"imgs/projected/{code}.png"
+            connected_path = f"imgs/connected/{code}.png"
+            double_path = f"imgs/double/{code}.png"
+            double_connected_path = f"imgs/double_connected/{code}.png"
+            paths = (projected_path, connected_path, double_path, double_connected_path)
 
-                if any([not os.path.exists(p) for p in paths]) or force:
-
-                    coords = [a.coord for a in chain.get_atoms() if a.id == "CA"]
-                    if len(coords) < 5:
+            projected = list()
+            coordsCA = list()
+            chainsRes = list()
+            if any([not os.path.exists(p) for p in paths]) or force:
+                for chain in structure[0]:
+                    if chain.id not in files_data[file]["chains"]:
+                        continue
+                    for residue in chain:
+                        for atom in residue:
+                            coordsCA.append(atom.coord)
+                            chainsRes.append(chain.id)
+                    coordsCB = [a.coord for a in chain.get_atoms() if a.id == "CB"]
+                    if len(coordsCA) < 5:
                         continue
                     for p in paths:
                         os.makedirs(os.path.dirname(p), exist_ok=True)
 
-                    pca = PCA(n_components=3, random_state=6)
-                    pca.fit(coords)
+                pca = PCA(n_components=3, random_state=6)
+                pca.fit(coordsCA)
+                projected_chain = pca.transform(coordsCA) # Already centered in centroid of protein
 
-                    projected = pca.transform(coords)
+                print(projected_chain)
+                # distances from centroid (coords already centered)
+                """
+                distances = np.linalg.norm(projected_chain, axis=1)
+                # find residue closest to centroid
+                center_idx = np.argmin(distances)
+                window = 30
+                start = max(0, center_idx - window)
+                end = min(len(projected_chain), center_idx + window)
+                projected_chain = projected_chain[start:end]
+                #projected = np.array([p for p in projected if p50Y+stdY >= p[1] >= p50Y-stdY])
+                #projected = [p for p in projected if p > p50]
+                
+                for ele, c in zip(projected_chain, chainsRes):
+                    projected.append(ele)
+                """
+                # Single Projected
+                projected = np.array([p for p in projected_chain if -6 <= p[0] <= 6])
+
+                fig = plt.figure(figsize=(1.28,1.28))
+                ax = fig.add_subplot(111)
+                ax.set_aspect("equal")
+                ax.axis("off")
+
+                ax.scatter(projected[:, 1], projected[:, 2], c="#00000050", marker=".")
+
+                fig.savefig(projected_path, transparent=True)
+
+                # Single connected
+
+                for i in range(len(projected)-1):
+                    ax.plot(projected[i:i+2, 1], projected[i:i+2, 2], color="#00000050")
+                fig.savefig(connected_path, transparent=True)
+
+                plt.close(fig)
 
 
-                    # Single Projected
-
-                    fig = plt.figure(figsize=(1.28,1.28))
-                    ax = fig.add_subplot(111)
-                    ax.set_aspect("equal")
-                    ax.axis("off")
-
-                    ax.scatter(projected[:, 0], projected[:, 1], c="#00000050", marker=".")
-
-                    fig.savefig(projected_path, transparent=True)
-
-                    # Single connected
-
-                    for i in range(len(projected)-1):
-                        ax.plot(projected[i:i+2, 0], projected[i:i+2, 1], color="#00000050")
-                    fig.savefig(connected_path, transparent=True)
-
-                    plt.close(fig)
-
-
-                    # Double Projected
-
-                    fig = plt.figure(figsize=(1.28, 1.28))
-                    ax = fig.add_subplot(111)
-                    ax.set_aspect("equal")
-                    ax.axis('off')
-
-                    ax.scatter(projected[:, 0], projected[:, 1], c="#00000025", marker=".")
-                    ax.scatter(np.array(projected[:, 0])*-1, np.array(projected[:, 1])*-1, c="#00000025", marker=".")
-
-
-                    fig.savefig(double_path, transparent=True)
-
-
-                    # Double Connected
-                    for i in range(len(projected)-1):
-                        ax.plot(projected[i:i+2, 0], projected[i:i+2, 1], color="#00000025")
-                        ax.plot(np.array(projected[i:i+2, 0])*-1, np.array(projected[i:i+2, 1])*-1, color="#00000025")
-                    fig.savefig(double_connected_path, transparent=True)
-                    plt.close(fig)
 
     pool = ThreadPool()
     for b in batches:
@@ -254,46 +257,11 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
     import torch
     import torch.nn as nn
 
-    if "small" in sys.argv:
-        from models import SmallNet as SmallNet
-        M = SmallNet
+    from models import SmallNetQMINST as SmallNet
+    M = SmallNet
 
-    elif "small2" in sys.argv:
-        from models import SmallNetv2 as SmallNet
-        M = SmallNet
-
-    elif "small3" in sys.argv:
-        from models import SmallNetv3 as SmallNet
-        M = SmallNet
-
-    elif "QMNIST" in sys.argv or "modelq" in sys.argv:
-        from models import SmallNetQMINST as SmallNet
-        M = SmallNet
-
-    if "mega" in sys.argv:
-        dataset_name = "mega"
-        file_folder = bi.biopython.downloadPDB("../internship/data", "mega-batch",
-                                               file_path="../internship/data/mega-batch20K.txt", file_format="cif",
-                                               overwrite=False)
-    elif "cath" in sys.argv:
-        dataset_name = "cath"
-        file_folder = bi.biopython.downloadPDB("../internship/data", "cath-nonredundant-S20",
-                                               file_path="../internship/data/cath-dataset-nonredundant-S20.list", file_format="cif",
-                                               overwrite=False)
-    elif "amys" in sys.argv:
-        dataset_name = "amys"
-        file_folder = bi.biopython.downloadPDB("../internship/data", "amys",
-                                               file_path="../internship/data/amys.txt", file_format="cif",
-                                               overwrite=False)
-    elif "QMNIST" in sys.argv:
-        dataset_name = "QMNIST"
-        file_folder = None
-        mode="none"
-    else:
-        dataset_name = "rcps"
-        file_folder = bi.biopython.downloadPDB("../internship/data", "receptors",
-                                               file_path="../internship/data/receptors.txt", file_format="cif",
-                                               overwrite=False)
+    dataset_name = "tetramers"
+    file_folder = "/media/mari/Data/vib_leuven/datasets/cc_sasa/biomols"
 
     if "auto" in sys.argv:
         net_mode = "auto"
@@ -319,7 +287,9 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
             valid = 0
             no_label = 0
             no_image = 0
-            for n, file in enumerate(os.listdir(file_folder)):
+            global files_selected
+            print("heheheh",files_selected)
+            for n, file in enumerate(files_selected):
                 code = file.split(".")[0]
                 l_path = os.path.join("labels", f"{code}.labels.json")
                 if os.path.exists(l_path):
@@ -351,18 +321,13 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
 
 
             n_labs = {k:v for k,v in sorted([(l, labs.count(l)) for l in set(labs)], key= lambda x: x[1], reverse=True)}
-            n_labs["other"] = 0
 
-            index_to_label = {0: "other"}
-            label_to_index = {"other": 0}
-            for n, (k, v) in enumerate(n_labs.items()):
-                if n >= 10:
-                    label_to_index[str(k)] = 0
-                    n_labs["other"] +=1
-                else:
-                    n = len(index_to_label)
-                    label_to_index[str(k)] = int(n)
-                    index_to_label[int(n)] = str(k)
+            index_to_label = {}
+            label_to_index = {}
+            for k, v in n_labs.items():
+                n = len(index_to_label)
+                label_to_index[str(k)] = int(n)
+                index_to_label[int(n)] = str(k)
 
             labs = index_to_label.values()
             all_labs = label_to_index.keys()
@@ -418,19 +383,15 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
 
             def detect_chain_mode(self, codes):
                 codes = list(codes)
-                if len(codes[0]) == 4:
+                print(codes)
+                if len(codes[0].split("_")) == 2:
                     self.has_chains = False
                     self.has_separated_chains = False
-                elif len(codes[0]) == 5:
-                    self.has_chains = True
-                    self.has_separated_chains = False
-                elif len(codes[0]) == 6:
+                elif len(codes[0].split("_")) == 3:
                     self.has_chains = True
                     self.has_separated_chains = True
-                    self.separator = codes[0][4]
                 else:
                     raise Exception(f"ImageDataset: provided list is not made of pdb codes and/or chains. Provided: {codes[0]}")
-
             def split(self, pdb_codes, target=0.2):
                 self.detect_chain_mode(pdb_codes)
                 return self.validate_input(pdb_codes, split=True, target=target)
@@ -448,7 +409,7 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
 
 
             def validate_input(self, codes=None, split=False, target=0.2):
-
+                print("codes",codes)
                 if split:
                     splitted = {"test":{}, "train":{}}
 
@@ -456,17 +417,14 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
                 valid_chains = []
                 valid_codes = []
                 for file in os.listdir(self.img_folder):
-
                     name = file.split(".")[0]
-                    code, chain = name.split("_")
+                    code, biomol = name.split("_")
+                    code = f"{code}_{biomol}"
                     if codes is not None:
                         if self.has_chains:
-                            if self.has_separated_chains:
-                                if not (f"{code}{self.separator}{chain}" in codes):
-                                    continue
-                            else:
-                                if not (f"{code}{chain}" in codes):
-                                    continue
+                            if not (f"{code}_{chain}" in codes):
+
+                                continue
                         else:
                             if not (code in codes):
                                 continue
@@ -475,27 +433,29 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
                     l_path = os.path.join(self.label_folder, f"{code}.labels.json")
                     if os.path.exists(l_path):
                         try:
-                            lab = json.load(open(l_path))[chain]["label"]
+                            print(json.load(open(l_path)))
+                            lab = json.load(open(l_path))["0"]["label"]
                             self.labels.append(lab)
                             self.images.append(file)
                         except KeyError:
                             no_label += 1
+                            raise
                             continue
                     else:
                         no_label += 1
                         continue
-                    valid_chains.append(f"{code}_{chain}")
+                    valid_chains.append(f"{code}")
                     valid_codes.append(code)
                     if split:
                         #print(lab,lab in splitted["train"].keys() )
                         if lab in splitted["train"].keys():
                             ratio = len(splitted["test"][lab])/len(splitted["train"][lab])
                             if ratio > target:
-                                splitted["train"][lab].append(f"{code}_{chain}")
+                                splitted["train"][lab].append(f"{code}")
                             else:
-                                splitted["test"][lab].append(f"{code}_{chain}")
+                                splitted["test"][lab].append(f"{code}")
                         else:
-                            splitted["train"][lab] = [f"{code}_{chain}"]
+                            splitted["train"][lab] = [f"{code}"]
                             splitted["test"][lab] = []
                             #print("new lab:", lab)
                 if split:
@@ -529,12 +489,13 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
             def __getitem__(self, idx, as_image=False):
                 fname = self.images[idx]
                 name = os.path.basename(fname).split(".")[0]
-                code, ch = name.split("_")
+                code, biomol = name.split("_")
+                code = f"{code}_{biomol}"
 
                 i_path = os.path.join(self.img_folder, fname)
                 l_path = os.path.join(self.label_folder, f"{code}.labels.json")
-
-                label = label_to_index[json.load(open(l_path))[ch]["label"].lower().strip()]
+                keys = label_to_index.keys()
+                label = label_to_index[json.load(open(l_path))["0"]["label"].lower().strip()]
 
 
                 image = Image.open(i_path)
@@ -571,6 +532,8 @@ def image_classifier(mode="connected", train = True, decode=False, view=False, t
             #print(len(structure_list))
             #print(structure_list[0:20])
             #train_list, test_list = train_test_split(structure_list, train_size=0.8, test_size=0.2, random_state=42)
+            print("aqui",structure_list)
+            print(files_selected)
             train_list, test_list = ImageDataset(img_folder=img_folder, label_folder="labels", init=False).split(structure_list)
             print(len(train_list), len(test_list))
             trainset = ImageDataset(train_list, img_folder=img_folder, label_folder="labels")
@@ -1039,14 +1002,3 @@ else:
     if "double" in sys.argv:
         mode = "double_connected"
     image_classifier(mode=mode, train="-t" in sys.argv, decode="decode" in sys.argv, temp="temp" in sys.argv, view="view" in sys.argv)
-
-
-
-
-
-
-
-
-
-
-
